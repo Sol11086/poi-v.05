@@ -108,7 +108,7 @@ const sendMessage = () => {
     <template #header>
         <span class="flex gap-5 font-medium text-2xl text-lavander items-center">
             <i class="pi pi-bell"></i>
-            Notificaciones 3
+            Notificaciones
         </span>
     </template>
         <Notifications ></Notifications>
