@@ -1,14 +1,19 @@
 <script setup>
 import { ref } from "vue";
 import 'primeicons/primeicons.css'
+
+const showCreateHomework = ref(false);
+
 </script>
 
 <template>
-    <div class="bg-matrichBlue h-16 w-full p-0">
-            <span class="flex gap-5 font-medium text-2xl text-lavander p-5 items-center">
-                <i class="pi pi-inbox"></i>
-                Tareas
-            </span>
+    <div class="flex bg-matrichBlue h-16 w-full p-0 items-center justify-between px-5">
+      <span class="flex gap-5 font-medium text-2xl text-lavander items-center">
+          <i class="pi pi-inbox"></i>
+          Tareas
+      </span>
+      <Button label="Crear nueva tarea" @click="showCreateHomework = true"
+      class="rounded-full bg-transparent text-lavander border-lavander hover:bg-lavander hover:text-white" />
     </div>
         <div class="p-5">
             <Panel toggleable class="bg-darkJunge border-none mb-10">
@@ -198,6 +203,27 @@ import 'primeicons/primeicons.css'
                 </p>
             </Panel>
         </div>
+        <Dialog v-model:visible="showCreateHomework" class="bg-darkGreen border-pomonaGreen">
+            <template #header>
+                    <span class="flex gap-5 font-medium text-2xl text-lavander items-center">
+                    <i class="pi pi-inbox"></i>
+                    Nueva tarea  
+                </span>
+                </template>
+            <span class="text-surface-500 dark:text-surface-400 block mb-8">Describe a tu tarea</span>
+            <div class="flex items-center gap-4 mb-4">
+                <label for="username" class="font-semibold w-24">Titulo</label>
+                <InputText id="username" class="flex-auto rounded-full bg-gunMetal border-none" autocomplete="off" />
+            </div>
+            <div class="flex items-center gap-4 mb-4">
+                <label for="email" class="font-semibold w-24">Descripcion</label>
+                <InputText id="email" class="flex-auto rounded-full bg-gunMetal border-none" autocomplete="off" />
+            </div>
+            <div class="flex justify-end gap-2">
+                <Button type="button"  class="rounded-full border-error text-error bg-transparent hover:bg-error hover:text-white" label="Cancelar" severity="secondary" @click="visible = false"></Button>
+                <Button type="button" class="rounded-full " label="Crear" @click="visible = false"></Button>
+            </div>
+        </Dialog>
 </template>
 
 <style scoped>

@@ -29,7 +29,7 @@ const config = {
         content: '#18181B',
         grayZinc: '#3F3F46',
         azureishWhite: '#E2E8F0',
-        error: '#E34449',
+        error: '#C13030',
         platinum: '#E1E3E8',
         charcoal: '#334155',
         cadetGray: '#94A3B8',
