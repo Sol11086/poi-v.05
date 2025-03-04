@@ -16,7 +16,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src'), // Configura el alias `@` para que apunte a la carpeta `src`
+      '@': path.resolve(__dirname, 'src'),
     },
   },
 })
