@@ -24,66 +24,200 @@ const sendMessage = () => {
 </script>
 
 <template>
-    <div class="flex h-96">
-            <div class="w-16 md:w-64 bg-darkJunge text-white p-4 flex flex-col">
-            <h2 class="text-lg font-semibold mb-4">Contacts</h2>
-            <ul>
-                <li 
+    <div class="chat-container">
+    <div class="sidebar">
+        <h2 class="sidebar-title">Contacts</h2>
+        <ul class="user-list">
+            <li 
                 v-for="user in users" 
                 :key="user.id" 
                 @click="selectUser(user)"
-                class="flex items-center p-2 cursor-pointer hover:bg-gray-800 rounded-lg"
-                >
-                <img :src="user.avatar" class="w-10 h-10 rounded-full mr-3" />
+                class="user-item"
+            >
+                <img :src="user.avatar" class="user-avatar" />
                 <span>{{ user.name }}</span>
-                </li>
-            </ul>
+            </li>
+        </ul>
+    </div>
+    
+    <!-- Área del chat -->
+    <div class="chat-area">
+        <!-- Header del chat -->
+        <div v-if="selectedUser" class="chat-header">
+            <img :src="selectedUser.avatar" class="chat-header-avatar" />
+            <div>
+                <h2 class="chat-header-title">{{ selectedUser.name }}</h2>
+                <p class="chat-header-status">En línea</p>
             </div>
-            
-            <!-- Área del chat -->
-            <div class="w-3/4 flex flex-col">
-            <!-- Header del chat -->
-            <div v-if="selectedUser" class="bg-gray-800 text-white p-4 flex items-center">
-                <img :src="selectedUser.avatar" class="w-10 h-10 rounded-full mr-3" />
-                <div>
-                <h2 class="text-lg font-semibold">{{ selectedUser.name }}</h2>
-                <p class="text-sm text-green-400">En línea</p>
-                </div>
-            </div>
-            
-            <!-- Mensajes -->
-            <div class="flex-1 h-64 max-h-96 p-4 overflow-y-auto bg-black">
-                <div 
+        </div>
+        
+        <!-- Mensajes -->
+        <div class="message-container">
+            <div 
                 v-for="message in messages" 
                 :key="message.id" 
                 :class="{'text-right': message.sender === 'me'}"
-                class="mb-2 rounded-full"
-                >
+                class="message-item"
+            >
                 <p 
-                    class="inline-block px-4 py-2 rounded-full" 
-                    :class="message.sender === 'me' ? 'bg-primary-500 text-white' : 'bg-gray-300 text-black'"
+                    class="message-text" 
+                    :class="message.sender === 'me' ? 'message-sent' : 'message-received'"
                 >
                     {{ message.text }}
                 </p>
-                </div>
             </div>
-            
-            <!-- Input de mensaje -->
-            <div class="p-4 bg-gray-800 flex">
-                <input 
+        </div>
+        
+        <!-- Input de mensaje -->
+        <div class="message-input">
+            <input 
                 v-model="newMessage" 
                 @keyup.enter="sendMessage" 
                 placeholder="Escribe un mensaje..." 
-                class="flex-1 p-2 border rounded-full bg-gunMetal border-none text-white hover:border-gray-800s"
-                />
-                <Button icon="pi pi-send" @click="sendMessage" 
+                class="message-input-field"
+            />
+            <Button icon="pi pi-send" @click="sendMessage" 
                 severity="contrast" variant="text" 
                 rounded  
-                class=" text-primary-500 hover:bg-transparent hover:text-pomonaGreen "/>
-            </div>
+                class="send-button"
+            />
         </div>
-     </div>
+    </div>
+</div>
 </template>
 
 <style scoped>
+
+.chat-container {
+    display: flex;
+    height: 24rem; /* 96rem en Tailwind */
+}
+
+.sidebar {
+    width: 4rem; /* 16 en Tailwind, ajustable con breakpoints */
+    background-color: #2C2F38; /* DarkJunge */
+    color: white;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-title {
+    font-size: 1.125rem; /* text-lg */
+    font-weight: 600; /* font-semibold */
+    margin-bottom: 1rem;
+}
+
+.user-list {
+    list-style: none;
+    padding: 0;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    cursor: pointer;
+    border-radius: 0.5rem;
+}
+
+.user-item:hover {
+    background-color: #2F3339; /* Color hover similar a bg-gray-800 */
+}
+
+.user-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    margin-right: 0.75rem; /* gap-3 */
+}
+
+.chat-area {
+    width: 75%; /* 3/4 de ancho */
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-header {
+    background-color: #2F3339; /* gray-800 */
+    color: white;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+}
+
+.chat-header-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    margin-right: 0.75rem; /* gap-3 */
+}
+
+.chat-header-title {
+    font-size: 1.125rem; /* text-lg */
+    font-weight: 600; /* font-semibold */
+}
+
+.chat-header-status {
+    font-size: 0.875rem; /* text-sm */
+    color: #10B981; /* text-green-400 */
+}
+
+.message-container {
+    flex: 1;
+    max-height: 24rem; /* max-h-96 */
+    padding: 1rem;
+    overflow-y: auto;
+    background-color: #000000; /* bg-black */
+}
+
+.message-item {
+    margin-bottom: 0.5rem; /* mb-2 */
+    border-radius: 9999px; /* rounded-full */
+}
+
+.message-text {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+}
+
+.message-sent {
+    background-color: #4B7FFF; /* bg-primary-500 */
+    color: white;
+}
+
+.message-received {
+    background-color: #D1D5DB; /* bg-gray-300 */
+    color: black;
+}
+
+.message-input {
+    padding: 1rem;
+    background-color: #2F3339; /* gray-800 */
+    display: flex;
+}
+
+.message-input-field {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 9999px;
+    background-color: #2A2F36; /* bg-gunMetal */
+    border: none;
+    color: white;
+}
+
+.message-input-field:hover {
+    border-color: #2D3748; /* border-gray-800 */
+}
+
+.send-button {
+    color: #4B7FFF; /* text-primary-500 */
+}
+
+.send-button:hover {
+    background-color: transparent;
+    color: #00A451; /* text-pomonaGreen */
+}
+
 </style>

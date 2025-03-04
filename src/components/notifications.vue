@@ -5,87 +5,133 @@ import { ref } from 'vue'
 </script>
 
 <template>
-    <Card class="bg-richBlack p-0 mb-3">
-        <template #content>
-            <div class="flex gap-4 ">
-                <div class="flex justify-center items-center">
-                    <Avatar
+ <Card class="custom-card">
+    <template #content>
+        <div class="custom-content">
+            <div class="custom-avatar">
+                <Avatar
                     image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"/>
-                </div>
-                <div class="col-span-2">
-                    <p class=" text-xl font-bold dark:text-surface-400"> Usuario 1 </p>
-                    <p class="dark:text-surface-400"> A subido una tarea a este grupo </p>
-                </div>
+                    shape="circle"
+                />
             </div>
-        </template>
-        <template #footer>
-        <div class="flex justify-end">
+            <div class="content-text">
+                <p class="user-name"> Usuario 1 </p>
+                <p class="task-description"> A subido una tarea a este grupo </p>
+            </div>
+        </div>
+    </template>
+    <template #footer>
+        <div class="custom-footer">
             <small> martes 15:32 </small>
         </div>
     </template>
-    </Card>
-    <Card class="bg-richBlack p-0 mb-3">
-        <template #content>
-            <div class="flex gap-4 ">
-                <div class="flex justify-center items-center">
-                    <Avatar
+</Card>
+
+<Card class="custom-card">
+    <template #content>
+        <div class="custom-content">
+            <div class="custom-avatar">
+                <Avatar
                     image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"/>
-                </div>
-                <div class="col-span-2">
-                    <p class=" text-xl font-bold dark:text-surface-400"> Usuario 1 </p>
-                    <p class="dark:text-surface-400"> A subido una tarea a este grupo </p>
-                </div>
+                    shape="circle"
+                />
             </div>
-        </template>
-        <template #footer>
-        <div class="flex justify-end">
+            <div class="content-text">
+                <p class="user-name"> Usuario 1 </p>
+                <p class="task-description"> A subido una tarea a este grupo </p>
+            </div>
+        </div>
+    </template>
+    <template #footer>
+        <div class="custom-footer">
             <small> martes 15:32 </small>
         </div>
     </template>
-    </Card>
-    <Card class="bg-richBlack p-0 mb-3">
-        <template #content>
-            <div class="flex gap-4 ">
-                <div class="flex justify-center items-center">
-                    <Avatar
+</Card>
+
+<Card class="custom-card">
+    <template #content>
+        <div class="custom-content">
+            <div class="custom-avatar">
+                <Avatar
                     image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"/>
-                </div>
-                <div class="col-span-2">
-                    <p class=" text-xl font-bold dark:text-surface-400"> Usuario 1 </p>
-                    <p class="dark:text-surface-400"> A subido una tarea a este grupo </p>
-                </div>
+                    shape="circle"
+                />
             </div>
-        </template>
-        <template #footer>
-        <div class="flex justify-end">
+            <div class="content-text">
+                <p class="user-name"> Usuario 1 </p>
+                <p class="task-description"> A subido una tarea a este grupo </p>
+            </div>
+        </div>
+    </template>
+    <template #footer>
+        <div class="custom-footer">
             <small> martes 15:32 </small>
         </div>
     </template>
-    </Card>
-    <Card class="bg-richBlack p-0 mb-3">
-        <template #content>
-            <div class="flex gap-4 ">
-                <div class="flex justify-center items-center">
-                    <Avatar
+</Card>
+
+<Card class="custom-card">
+    <template #content>
+        <div class="custom-content">
+            <div class="custom-avatar">
+                <Avatar
                     image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"/>
-                </div>
-                <div class="col-span-2">
-                    <p class=" text-xl font-bold dark:text-surface-400"> Usuario 1 </p>
-                    <p class="dark:text-surface-400"> A subido una tarea a este grupo </p>
-                </div>
+                    shape="circle"
+                />
             </div>
-        </template>
-        <template #footer>
-        <div class="flex justify-end">
+            <div class="content-text">
+                <p class="user-name"> Usuario 1 </p>
+                <p class="task-description"> A subido una tarea a este grupo </p>
+            </div>
+        </div>
+    </template>
+    <template #footer>
+        <div class="custom-footer">
             <small> martes 15:32 </small>
         </div>
     </template>
-    </Card>
+</Card>
 </template>
 
 <style scoped>
+.custom-card {
+    background-color: #1a1d22; /* rich black */
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+.custom-content {
+    display: flex;
+    gap: 1rem;
+}
+
+.custom-avatar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.content-text {
+    grid-column: span 2;
+}
+
+.user-name {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #d1d5db; /* Surface color */
+}
+
+.task-description {
+    color: #d1d5db; /* Surface color */
+}
+
+.custom-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.custom-footer small {
+    font-size: 0.875rem;
+}
 </style>

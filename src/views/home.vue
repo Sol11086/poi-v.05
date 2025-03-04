@@ -41,24 +41,24 @@ const setActiveComponent = (component) => {
 </script>
 
 <template>
-   <div class="h-screen flex flex-col">
-    <Menubar class="bg-darkGreen border-none rounded-none m-0 p-2 fixed top-0 left-0 w-full z-50">
+     <div class="app-container">
+    <Menubar class="menubar">
       <template #start>
         <Button label="Empresa X" variant="link" class="" />
       </template>
       <template #end>
-        <div class="flex items-center gap-2">
+        <div class="menubar-end">
           <InputText
             placeholder="Search"
             type="text"
-            class="w-32 sm:w-auto rounded-full bg-gunMetal border-none"
+            class="search-input"
           />
           <Button
             icon="pi pi-ellipsis-h"
             variant="text"
             rounded
             aria-label="Filter"
-            class="hover:bg-transparent hover:text-pomonaGreen"
+            class="filter-button"
           />
           <Avatar
             image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
@@ -68,25 +68,23 @@ const setActiveComponent = (component) => {
       </template>
     </Menubar>
 
-    <div class="flex flex-1 pt-[4rem]">
-      <div
-        class="bg-darkGreen w-16 flex flex-col items-center py-5 fixed top-[4rem] left-0 h-[calc(100vh-4rem)] z-40"
-      >
+    <div class="sidebar-container">
+      <div class="sidebar">
         <Button
           icon="pi pi-bell"
           variant="text"
           size="large"
           @click="visibleNotis = true"
           rounded
-          class="hover:bg-transparent hover:text-pomonaGreen mb-10"
+          class="sidebar-button"
         />
         <Button
           icon="pi pi-users"
           variant="text"
-           @click="setActiveComponent('teams')"
+          @click="setActiveComponent('teams')"
           size="large"
           rounded
-          class="hover:bg-transparent hover:text-pomonaGreen mb-10"
+          class="sidebar-button"
         />
         <Button
           icon="pi pi-comments"
@@ -94,7 +92,7 @@ const setActiveComponent = (component) => {
           size="large"
           @click="visibleChat = true"
           rounded
-          class="hover:bg-transparent hover:text-pomonaGreen mb-10"
+          class="sidebar-button"
         />
         <Button
           icon="pi pi-inbox"
@@ -102,11 +100,11 @@ const setActiveComponent = (component) => {
           size="large"
           @click="setActiveComponent('homework')"
           rounded
-          class="hover:bg-transparent hover:text-pomonaGreen mb-10"
+          class="sidebar-button"
         />
       </div>
 
-      <div class="flex-1 bg-[#010F16] text-white overflow-auto ml-16">
+      <div class="main-content">
         <Teams v-if="activeComponent === 'teams'" />
         <Homeworks v-if="activeComponent === 'homework'" />
       </div>
@@ -115,20 +113,21 @@ const setActiveComponent = (component) => {
     <Drawer
       v-model:visible="visibleNotis"
       header="Notificaciones"
-      class="!w-1/4 md:!w-80 lg:!w-[30rem] fixed top-[4rem] right-0 h-[calc(100vh-4rem)] z-50 bg-darkGreen border-none"
+      class="drawer"
       :style="{ left: '4rem' }"
+      pt:root:class="!border-0 !bg-#021F25" pt:mask:class="backdrop-blur-sm"
     >
     <template #header>
-        <span class="flex gap-5 font-medium text-2xl text-lavander items-center">
+        <span class="drawer-header">
             <i class="pi pi-bell"></i>
-            Notidicaciones 
+            Notificaciones 
         </span>
     </template>
-        <Notifications ></Notifications>
+        <Notifications></Notifications>
     </Drawer>
-    <Dialog v-model:visible="visibleChat"  maximizable class="bg-darkGreen border-pomonaGreen">
+    <Dialog v-model:visible="visibleChat" maximizable class="dialog">
         <template #header>
-            <span class="flex gap-5 font-medium text-2xl text-lavander items-center">
+            <span class="dialog-header">
             <i class="pi pi-comments"></i>
             Chat 
         </span>
@@ -139,5 +138,111 @@ const setActiveComponent = (component) => {
 </template>
 
 <style scoped>
+
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.menubar {
+  background-color: #021F25; /* Dark green */
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 50;
+}
+
+.menubar-end {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.search-input {
+  width: 25rem;
+  border-radius: 9999px;
+  background-color: #21333D; /* Gunmetal color */
+  border: none;
+}
+
+.filter-button {
+  background-color: transparent;
+  color: #129E82; /* Pomona Green */
+}
+
+.sidebar-container {
+  display: flex;
+  flex: 1;
+  padding-top: 4rem;
+}
+
+.sidebar {
+  background-color: #021F25;
+  width: 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem 0;
+  position: fixed;
+  top: 4rem;
+  left: 0;
+  height: calc(100vh - 4rem);
+  z-index: 40;
+}
+
+.sidebar-button {
+  margin-bottom: 2.5rem;
+  background-color: transparent;
+  color: #129E82; /* Pomona Green */
+}
+
+.main-content {
+  flex: 1;
+  background-color: #010f16;
+  color: white;
+  overflow: auto;
+  margin-left: 4rem;
+}
+
+.drawer {
+  width: 25%;
+  max-width: 80rem;
+  position: fixed;
+  top: 4rem;
+  right: 0;
+  height: calc(100vh - 4rem);
+  z-index: 50;
+  background-color: #2d3748;
+  border: none;
+}
+
+.drawer-header {
+  display: flex;
+  gap: 1.25rem;
+  font-weight: 500;
+  font-size: 1.25rem;
+  color: #9F86F9; /* Lavender color */
+  align-items: center;
+}
+
+.dialog {
+  background-color: #04293C;
+  border-color: #39b54a; /* Pomona Green */
+}
+
+.dialog-header {
+  display: flex;
+  gap: 1.25rem;
+  font-weight: 500;
+  font-size: 1.25rem;
+  color: #e0e0e0; /* Lavender color */
+  align-items: center;
+}
 
 </style>
