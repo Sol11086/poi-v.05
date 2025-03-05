@@ -95,10 +95,12 @@ import { ref } from 'vue'
 </template>
 
 <style scoped>
+
 .custom-card {
     background-color: #1a1d22; /* rich black */
     padding: 0;
     margin-bottom: 1rem;
+    height: 10rem;
 }
 
 .custom-content {
@@ -133,5 +135,12 @@ import { ref } from 'vue'
 
 .custom-footer small {
     font-size: 0.875rem;
+}
+
+.search-input {
+  width: 25rem;
+  border-radius: 9999px;
+  background-color: #21333D; /* Gunmetal color */
+  border: none;
 }
 </style>

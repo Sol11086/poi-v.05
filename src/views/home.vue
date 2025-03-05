@@ -38,6 +38,13 @@ const activeComponent = ref('home');
 const setActiveComponent = (component) => {
   activeComponent.value = activeComponent.value === component ? null : component;
 };
+
+const op = ref();
+const toggle = (event) => {
+    op.value.toggle(event);
+}
+
+
 </script>
 
 <template>
@@ -48,21 +55,37 @@ const setActiveComponent = (component) => {
       </template>
       <template #end>
         <div class="menubar-end">
+          <Button
+            icon="pi pi-gift"
+            variant="text"
+            rounded
+            size="small"
+            aria-label="Filter"
+            class="filter-button"
+            @click="toggle"
+          />
+          <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#04293C' , border: 'none' }" >
+            <div class="flex flex-col gap-4">
+                    <span style="color:aliceblue"> Recompensas </span>
+                    <i class="pi pi-spin pi-star-fill" style="font-size: 1rem ; color: yellowgreen "></i>
+            </div>
+        </Popover>
           <InputText
             placeholder="Search"
             type="text"
             class="search-input"
           />
+          <Button type="button" icon="pi pi-share-alt" label="Share" @click="toggle" />
+          <Avatar
+            image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
+            shape="circle"
+          />
           <Button
-            icon="pi pi-ellipsis-h"
+            icon="pi pi-sign-out"
             variant="text"
             rounded
             aria-label="Filter"
             class="filter-button"
-          />
-          <Avatar
-            image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-            shape="circle"
           />
         </div>
       </template>
@@ -114,8 +137,8 @@ const setActiveComponent = (component) => {
       v-model:visible="visibleNotis"
       header="Notificaciones"
       class="drawer"
-      :style="{ left: '4rem' }"
-      pt:root:class="!border-0 !bg-#021F25" pt:mask:class="backdrop-blur-sm"
+      :style="{ left: '4rem', backgroundColor: '#04293C' , border: 'none' ,  width: '25rem'}"
+      pt:mask:class="backdrop-blur-sm"
     >
     <template #header>
         <span class="drawer-header">
@@ -125,7 +148,7 @@ const setActiveComponent = (component) => {
     </template>
         <Notifications></Notifications>
     </Drawer>
-    <Dialog v-model:visible="visibleChat" maximizable class="dialog">
+    <Dialog v-model:visible="visibleChat" maximizable class="dialog"  :style="{ left: '4rem', backgroundColor: '#04293C' }">
         <template #header>
             <span class="dialog-header">
             <i class="pi pi-comments"></i>
@@ -169,6 +192,7 @@ const setActiveComponent = (component) => {
   border-radius: 9999px;
   background-color: #21333D; /* Gunmetal color */
   border: none;
+  color: white
 }
 
 .filter-button {
@@ -204,15 +228,17 @@ const setActiveComponent = (component) => {
 
 .main-content {
   flex: 1;
-  background-color: #010f16;
+  background: #010F16 url('/src/assets/Group 39.png') no-repeat;
+  background-position: 120% 5%;
+  background-size: 700px auto;
   color: white;
   overflow: auto;
   margin-left: 4rem;
 }
 
 .drawer {
-  width: 25%;
-  max-width: 80rem;
+  width: 100%;
+  max-width: 100rem;
   position: fixed;
   top: 4rem;
   right: 0;

@@ -46,10 +46,17 @@ const showCreateHomework = ref(false);
             Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
             Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
         </p>
+        <p class="task-description">
+            Recompensa:
+        </p>
+        <p class="task-description">
+            <i class="pi pi-spin pi-star-fill" style="font-size: 2rem ; color: yellowgreen "></i>
+        </p>
     </Panel>
 </div>
 
-<Dialog v-model:visible="showCreateHomework" class="custom-dialog">
+<Dialog v-model:visible="showCreateHomework" class="custom-dialog" 
+:style="{ left: '4rem', backgroundColor: '#04293C' }">
     <template #header>
         <span class="dialog-header">
             <i class="pi pi-inbox"></i>
@@ -122,12 +129,14 @@ const showCreateHomework = ref(false);
 .panel-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem; /* gap-2 */
+    gap: 0.5rem;
+  
 }
 
 .panel-title {
     font-weight: bold; /* font-bold */
-    color: #757575; /* dark:text-surface-400 */
+    color: #e5e5e5; 
+    font-size: large;
 }
 
 /* Panel Footer */
@@ -182,13 +191,15 @@ const showCreateHomework = ref(false);
 }
 
 .task-detail {
-    margin-top: 0.5rem; /* mt-2 */
+    margin-top: 0.5rem;
+    color: rgb(232, 238, 237)
 }
 
 /* Dialog */
 .custom-dialog {
-    background-color: #003b2f; /* bg-darkGreen */
-    border: 1px solid #28a745; /* border-pomonaGreen */
+    border: 2px solid #129E82 !important;
+    background-color: #003b2f; 
+    border: 2px solid #063611; 
 }
 
 .dialog-header {
