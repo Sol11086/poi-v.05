@@ -8,7 +8,11 @@
   @tailwind components;
   @tailwind utilities;
 }
-
+*{
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 .imageBg {
   background: #010F16 url('/src/assets/Group 39.png') no-repeat;
   background-size: cover;
@@ -17,4 +21,5 @@
 
 body {
   background-color: #010F16;
+  overflow-y: hidden;
 }

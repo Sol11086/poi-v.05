@@ -91,6 +91,8 @@ const toggle = (event) => {
       </template>
     </Menubar>
 
+    <landPage></landPage>
+
     <div class="sidebar-container">
       <div class="sidebar">
         <Button
