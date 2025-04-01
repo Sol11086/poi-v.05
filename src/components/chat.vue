@@ -1,26 +1,85 @@
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import 'primeicons/primeicons.css'
+import socket from "../socket";
 
-const users = ref([
+socket.on("connect", () => {
+    console.log("Conectado al servidor con ID:", socket.id);
+});
+
+const user = ref({
+    id: "VEK15",
+    name: "Victor",
+    avatar: '../src/assets/Don_Pollo_Starring.png'
+});
+
+const chats = ref([
     { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
     { id: 2, name: 'María', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg' },
+    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png' }
 ]);
 
-const selectedUser = ref(null);
+const selectedChat = ref(null);
 const messages = ref([]);
 const newMessage = ref('');
 
-const selectUser = (user) => {
-    selectedUser.value = user;
+//const room = ref(""); // implementar cuando se tenga conexión con la base
+const isJoined = ref(false);
+
+// Salir de la sala - implementar cuando el usuario abandone el grupo
+// const leaveRoom = (room) => {
+//   socket.emit("leaveRoom", room);
+// };
+
+// Resetear estado al salir de la sala
+socket.on("leftRoom", () => {
     messages.value = [];
+    isJoined.value = false;
+    room.value = "";
+});
+
+// Escuchar mensajes previos cuando se une a una sala
+socket.on("previousMessages", (history) => {
+    messages.value = history;
+});
+
+const selectChat = (chat) => {
+    selectedChat.value = chat;
+    messages.value = [];
+    chat.unreadMessages = 0; // Resetear notificaciones
+    socket.emit("loadMessages", chat.id);
 };
 
 const sendMessage = () => {
     if (newMessage.value.trim() === '') return;
-    messages.value.push({ id: Date.now(), text: newMessage.value, sender: 'me' });
+    socket.emit("sendMessage", {
+        room: selectedChat.value.id,//id del chat 
+        message: newMessage.value,
+        user: user.value.name || "Anónimo",
+    });
     newMessage.value = '';
 };
+
+//Escuchar mensajes recibidos
+onMounted(() => {
+    const roomIds = chats.value.map(chat => chat.id); // Extrae solo los IDs de las salas
+    socket.emit("joinAllRooms", roomIds);
+
+    socket.on("receiveMessage", (message) => {
+        if (selectedChat.value && selectedChat.value.id === message.room) {
+            messages.value.push(message);
+        } else {
+            console.log(`Mensaje recibido en otra sala (${message.room}):`, message);
+            const chat = chats.value.find(c => c.id === message.room);
+            if (chat) chat.unreadMessages += 1; // Incrementa contador de mensajes no leídos
+        }
+    });
+});
+
+onUnmounted(() => {
+    socket.off("receiveMessage");
+});
+
 </script>
 
 <template>
@@ -28,9 +87,10 @@ const sendMessage = () => {
         <div class="sidebar">
             <h2 class="sidebar-title">Contacts</h2>
             <ul class="user-list">
-                <li v-for="user in users" :key="user.id" @click="selectUser(user)" class="user-item">
-                    <img :src="user.avatar" class="user-avatar" />
-                    <span>{{ user.name }}</span>
+                <li v-for="chat in chats" :key="chat.id" @click="selectChat(chat)" class="user-item">
+                    <img :src="chat.avatar" class="user-avatar" />
+                    <span>{{ chat.name }}</span>
+                    <span v-if="chat.unreadMessages > 0" class="unread-badge">{{ chat.unreadMessages }}</span>
                 </li>
             </ul>
         </div>
@@ -38,20 +98,19 @@ const sendMessage = () => {
         <!-- Área del chat -->
         <div class="chat-area">
             <!-- Header del chat -->
-            <div v-if="selectedUser" class="chat-header">
-                <img :src="selectedUser.avatar" class="chat-header-avatar" />
+            <div v-if="selectedChat" class="chat-header">
+                <img :src="selectedChat.avatar" class="chat-header-avatar" />
                 <div>
-                    <h2 class="chat-header-title">{{ selectedUser.name }}</h2>
+                    <h2 class="chat-header-title">{{ selectedChat.name }}</h2>
                     <p class="chat-header-status">En línea</p>
                 </div>
             </div>
-
             <!-- Mensajes -->
             <div class="message-container">
-                <div v-for="message in messages" :key="message.id" :class="{ 'text-right': message.sender === 'me' }"
+                <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === 'me' }"
                     class="message-item">
-                    <p class="message-text" :class="message.sender === 'me' ? 'message-sent' : 'message-received'">
-                        {{ message.text }}
+                    <p class="message-text" :class="msg.user === 'me' ? 'message-sent' : 'message-received'">
+                        {{ msg.message }}
                     </p>
                 </div>
             </div>
@@ -119,7 +178,14 @@ const sendMessage = () => {
     margin-right: 0.75rem;
     /* gap-3 */
 }
-
+.unread-badge{
+    background-color: #10B981;
+    color: #D1D5DB;
+    width: 2vh;
+    margin: 0px 5px;
+    border-radius: 50%;
+    text-align: center;
+}
 .chat-area {
     width: 75%;
     /* 3/4 de ancho */
