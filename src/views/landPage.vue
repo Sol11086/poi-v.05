@@ -8,7 +8,7 @@
         </div>
         <div class="buttons">
             <button class="btn-1">Sign Up</button>
-            <button class="btn-2">Log In</button>
+            <button class="btn-2" @click="$router.push('/login')">Log In</button>
         </div>
     </div>
     <img class="img-design" src="../assets/diseño.png" alt="landing">
@@ -47,10 +47,12 @@
 .btn-1{
     width: 40%;
     background-color: #105B32;
+    cursor: pointer;
 }
 .btn-2{
     width: 60%;
     background-color: #129E82;
+    cursor: pointer;
 }
 .slogan{
     display: flex;

@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import crypto from 'crypto';
 
 const app = express();
 const server = createServer(app);
@@ -12,6 +13,18 @@ const io = new Server(server, {
 });
 
 const salas = {}; // Almacena mensajes por sala (temporalmente)
+
+
+function generateUserID() {
+    return crypto.randomBytes(5).toString('hex'); // 10 caracteres hexadecimales
+}
+
+function generateTeamID() {
+    return crypto.randomBytes(7).toString('hex'); // 14 caracteres hexadecimales
+}
+
+console.log(generateUserID()); // "a3f0c8d9e1"
+console.log(generateTeamID()); // "c7a9f8e2b1d4a7"
 
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
