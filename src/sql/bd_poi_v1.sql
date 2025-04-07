@@ -7,7 +7,7 @@ CREATE TABLE users (
     id VARCHAR(10) PRIMARY KEY,
     username VARCHAR(50) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
     avatar VARCHAR(255),
     status ENUM('online', 'offline', 'busy') DEFAULT 'offline',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -132,3 +132,7 @@ CREATE TABLE rewards (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+-- SELECT * FROM users
+-- ALTER TABLE users CHANGE COLUMN password_hash password VARCHAR(255) NOT NULL;
+-- INSERT INTO users (id, username, email, password, avatar, status)
+INSERT INTO users (id, username, email, password, avatar) VALUES ('VEK15', 'Veck MR', 'victormolru15@gmail.com', 'password123', 'default_avatar.png');

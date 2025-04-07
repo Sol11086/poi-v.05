@@ -1,19 +1,14 @@
-<script setup>
-
-import Password from 'primevue/password';
-
-</script>
 
 <template>
     <link ref="stylesheet" href="../assets/base.css" scoped>
     <div class="main-bg">
         <img class="img-bg" src="../assets/Fondo.png">
         <div class="login-card">
-            <form method="post">
+            <form @submit.prevent="handleLogin">
                 <h2>Iniciar Sesión</h2>
-                    <InputText id="user" name="user" v-model="value2" placeholder="Usuario"/>
-                    <Password name="pass" v-model="value2" inputId="pass" placeholder="Contraseña" toggleMask :feedback="false"/>
-                <Checkbox inputId="remember" v-model="checked" value="remember" binary />
+                <InputText id="user" name="user" v-model="username" placeholder="Usuario" />
+                <Password name="pass" v-model="password" inputId="pass" placeholder="Contraseña" toggleMask :feedback="false" />
+                <Checkbox inputId="remember" v-model="rememberMe" value="remember" binary />
                 <label for="remember"> Recuérdame </label><br>
                 <a id="forgot-pass">Olvidé mi contraseña</a>
                 <p>¿No tienes cuenta? <a id="go-register" href="#"> ¡Regístrate!</a></p>
@@ -22,6 +17,43 @@ import Password from 'primevue/password';
         </div>
     </div>
 </template>
+
+<script>
+import axios from 'axios';
+
+export default {
+  data() {
+    return {
+      username: '',
+      password: '',
+      rememberMe: false,
+    };
+  },
+  methods: {
+    async handleLogin() {
+      try {
+        const response = await axios.post('http://localhost:3000/login', {
+          username: this.username,
+          password: this.password,
+        });
+
+        if (response.data.success) {
+          // Almacena el token o información del usuario en el localStorage o en Vuex
+          localStorage.setItem('user_token', response.data.token);
+
+          // Redirigir al usuario a la página principal o al dashboard
+          this.$router.push('/home');
+        } else {
+          alert('Credenciales incorrectas');
+        }
+      } catch (error) {
+        console.error('Error al intentar iniciar sesión:', error);
+        alert('Hubo un problema al iniciar sesión');
+      }
+    },
+  },
+};
+</script>
 
 <style scoped>
 .main-bg {

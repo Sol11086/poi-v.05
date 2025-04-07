@@ -1,17 +1,16 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
 import 'primeicons/primeicons.css'
-import socket from "../socket";
+import socket from "@/utils/socket.js";
+import { parseJwt } from '@/utils/jwt.js';
 
 socket.on("connect", () => {
     console.log("Conectado al servidor con ID:", socket.id);
 });
 
-const user = ref({
-    id: "VEK15",
-    name: "Victor",
-    avatar: '../src/assets/Don_Pollo_Starring.png'
-});
+
+const token = localStorage.getItem('user_token');
+const username = parseJwt(token).username;
 
 const chats = ref([
     { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
@@ -55,7 +54,7 @@ const sendMessage = () => {
     socket.emit("sendMessage", {
         room: selectedChat.value.id,//id del chat 
         message: newMessage.value,
-        user: user.value.name || "Anónimo",
+        user: username || "Anónimo",
     });
     newMessage.value = '';
 };
@@ -107,9 +106,9 @@ onUnmounted(() => {
             </div>
             <!-- Mensajes -->
             <div class="message-container">
-                <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === 'me' }"
+                <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
                     class="message-item">
-                    <p class="message-text" :class="msg.user === 'me' ? 'message-sent' : 'message-received'">
+                    <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
                         {{ msg.message }}
                     </p>
                 </div>

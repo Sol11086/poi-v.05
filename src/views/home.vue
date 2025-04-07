@@ -1,17 +1,16 @@
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import 'primeicons/primeicons.css'
 import Notifications from "@/components/notifications.vue";
 import Chat from "@/components/chat.vue";
 import Homeworks from "@/components/homeworks.vue";
 import Teams from "@/components/teams.vue";
+import { parseJwt } from '@/utils/jwt.js';
 
 const visibleNotis = ref(false);
 const visibleChat = ref(false);
 const visibleHomework = ref(false);
 const visibleTeams = ref(false);
-
-
 
 const users = ref([
   { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
@@ -41,52 +40,53 @@ const setActiveComponent = (component) => {
 
 const op = ref();
 const toggle = (event) => {
-    op.value.toggle(event);
+  op.value.toggle(event);
 }
 
+const username = ref('');
+
+onMounted(() => {
+  const token = localStorage.getItem('user_token'); // <-- usa el nombre correcto
+  if (token) {
+    try {
+      const decoded = parseJwt(token);
+      console.log("Token decodificado:", decoded);
+      username.value = decoded.username || 'Usuario';
+    } catch (err) {
+      console.error("Token inválido:", err);
+    }
+  }
+});
+
+// function logout() {
+//   localStorage.removeItem('authToken');
+//   localStorage.removeItem('username');
+//   this.$router.push('/login'); // Redirige al login
+// }
 
 </script>
 
 <template>
-     <div class="app-container">
+  <div class="app-container">
     <Menubar class="menubar">
       <template #start>
         <Button label="Empresa X" variant="link" class="" />
       </template>
       <template #end>
         <div class="menubar-end">
-          <Button
-            icon="pi pi-gift"
-            variant="text"
-            rounded
-            size="small"
-            aria-label="Filter"
-            class="filter-button"
-            @click="toggle"
-          />
-          <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#04293C' , border: 'none' }" >
+          <Button icon="pi pi-gift" variant="text" rounded size="small" aria-label="Filter" class="filter-button"
+            @click="toggle" />
+          <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none' }">
             <div class="flex flex-col gap-4">
-                    <span style="color:aliceblue"> Recompensas </span>
-                    <i class="pi pi-spin pi-star-fill" style="font-size: 1rem ; color: yellowgreen "></i>
+              <span style="color:aliceblue"> Recompensas </span>
+              <i class="pi pi-spin pi-star-fill" style="font-size: 1rem ; color: yellowgreen "></i>
             </div>
-        </Popover>
-          <InputText
-            placeholder="Search"
-            type="text"
-            class="search-input"
-          />
+          </Popover>
+          <InputText placeholder="Search" type="text" class="search-input" />
           <Button type="button" icon="pi pi-share-alt" label="Share" @click="toggle" />
-          <Avatar
-            image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-            shape="circle"
-          />
-          <Button
-            icon="pi pi-sign-out"
-            variant="text"
-            rounded
-            aria-label="Filter"
-            class="filter-button"
-          />
+          <h2>Bienvenido, {{ username }}</h2>
+          <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
+          <Button icon="pi pi-sign-out" @click="logout()" variant="text" rounded aria-label="Filter" class="filter-button" />
         </div>
       </template>
     </Menubar>
@@ -95,38 +95,14 @@ const toggle = (event) => {
 
     <div class="sidebar-container">
       <div class="sidebar">
-        <Button
-          icon="pi pi-bell"
-          variant="text"
-          size="large"
-          @click="visibleNotis = true"
-          rounded
-          class="sidebar-button"
-        />
-        <Button
-          icon="pi pi-users"
-          variant="text"
-          @click="setActiveComponent('teams')"
-          size="large"
-          rounded
-          class="sidebar-button"
-        />
-        <Button
-          icon="pi pi-comments"
-          variant="text"
-          size="large"
-          @click="visibleChat = true"
-          rounded
-          class="sidebar-button"
-        />
-        <Button
-          icon="pi pi-inbox"
-          variant="text"
-          size="large"
-          @click="setActiveComponent('homework')"
-          rounded
-          class="sidebar-button"
-        />
+        <Button icon="pi pi-bell" variant="text" size="large" @click="visibleNotis = true" rounded
+          class="sidebar-button" />
+        <Button icon="pi pi-users" variant="text" @click="setActiveComponent('teams')" size="large" rounded
+          class="sidebar-button" />
+        <Button icon="pi pi-comments" variant="text" size="large" @click="visibleChat = true" rounded
+          class="sidebar-button" />
+        <Button icon="pi pi-inbox" variant="text" size="large" @click="setActiveComponent('homework')" rounded
+          class="sidebar-button" />
       </div>
 
       <div class="main-content">
@@ -135,35 +111,31 @@ const toggle = (event) => {
       </div>
     </div>
 
-    <Drawer
-      v-model:visible="visibleNotis"
-      header="Notificaciones"
-      class="drawer"
-      :style="{ left: '4rem', backgroundColor: '#04293C' , border: 'none' ,  width: '25rem'}"
-      pt:mask:class="backdrop-blur-sm"
-    >
-    <template #header>
+    <Drawer v-model:visible="visibleNotis" header="Notificaciones" class="drawer"
+      :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none', width: '25rem' }"
+      pt:mask:class="backdrop-blur-sm">
+      <template #header>
         <span class="drawer-header">
-            <i class="pi pi-bell"></i>
-            Notificaciones 
+          <i class="pi pi-bell"></i>
+          Notificaciones
         </span>
-    </template>
-        <Notifications></Notifications>
+      </template>
+      <Notifications></Notifications>
     </Drawer>
-    <Dialog v-model:visible="visibleChat" maximizable class="dialog"  :style="{ left: '4rem', backgroundColor: '#04293C' }">
-        <template #header>
-            <span class="dialog-header">
-            <i class="pi pi-comments"></i>
-            Chat 
+    <Dialog v-model:visible="visibleChat" maximizable class="dialog"
+      :style="{ left: '4rem', backgroundColor: '#04293C' }">
+      <template #header>
+        <span class="dialog-header">
+          <i class="pi pi-comments"></i>
+          Chat
         </span>
-        </template>
-            <Chat></Chat>
+      </template>
+      <Chat></Chat>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-
 .app-container {
   height: 100vh;
   display: flex;
@@ -171,7 +143,8 @@ const toggle = (event) => {
 }
 
 .menubar {
-  background-color: #021F25; /* Dark green */
+  background-color: #021F25;
+  /* Dark green */
   border: none;
   border-radius: 0;
   margin: 0;
@@ -192,14 +165,16 @@ const toggle = (event) => {
 .search-input {
   width: 25rem;
   border-radius: 9999px;
-  background-color: #21333D; /* Gunmetal color */
+  background-color: #21333D;
+  /* Gunmetal color */
   border: none;
   color: white
 }
 
 .filter-button {
   background-color: transparent;
-  color: #129E82; /* Pomona Green */
+  color: #129E82;
+  /* Pomona Green */
 }
 
 .sidebar-container {
@@ -225,7 +200,8 @@ const toggle = (event) => {
 .sidebar-button {
   margin-bottom: 2.5rem;
   background-color: transparent;
-  color: #129E82; /* Pomona Green */
+  color: #129E82;
+  /* Pomona Green */
 }
 
 .main-content {
@@ -255,13 +231,15 @@ const toggle = (event) => {
   gap: 1.25rem;
   font-weight: 500;
   font-size: 1.25rem;
-  color: #9F86F9; /* Lavender color */
+  color: #9F86F9;
+  /* Lavender color */
   align-items: center;
 }
 
 .dialog {
   background-color: #04293C;
-  border-color: #39b54a; /* Pomona Green */
+  border-color: #39b54a;
+  /* Pomona Green */
 }
 
 .dialog-header {
@@ -269,8 +247,8 @@ const toggle = (event) => {
   gap: 1.25rem;
   font-weight: 500;
   font-size: 1.25rem;
-  color: #e0e0e0; /* Lavender color */
+  color: #e0e0e0;
+  /* Lavender color */
   align-items: center;
 }
-
 </style>
