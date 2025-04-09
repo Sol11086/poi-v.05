@@ -7,6 +7,10 @@ import Login from '@/views/login.vue';
 const routes = [
   {
     path: '/',
+    redirect: '/login', // 👈 Esto redirige automáticamente a login
+  },
+  {
+    path: '/',
     component: Home,
     name: 'home'
   },

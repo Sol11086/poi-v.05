@@ -7,12 +7,17 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 
 const app = express();
-app.use(cors());
+
+// Permitir solicitudes desde ngrok (temporalmente acepta todos para pruebas)
+app.use(cors({
+    origin: '*', // Cambiar a dominio estando en producción
+  }))
+
 app.use(express.json()); // Para parsear JSON en el cuerpo de las solicitudes
 const server = createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:5173", // Permitir peticiones desde el frontend
+        origin: '*', // Permitir peticiones desde el frontend
         methods: ["GET", "POST"],
     },
 });

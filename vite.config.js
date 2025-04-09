@@ -19,4 +19,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  server: {
+    host: true, // IMPORTANTE: habilita acceso externo
+    port: 5173,
+    strictPort: true,
+    cors: true,
+    // ESTA ES LA CLAVE: permitir el host de ngrok explícitamente
+    allowedHosts: [
+      '230a-2806-230-4043-c126-10bf-8299-9f3a-7272.ngrok-free.app'// Cambiar por el host de ngrok se esté usando
+    ],
+  },
 })
