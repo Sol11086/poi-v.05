@@ -68,31 +68,29 @@ onMounted(() => {
 
 <template>
   <div class="app-container">
-    <Menubar class="menubar">
+    <Menubar class="bg-[#021F25] flex justify-between items-center px-4">
       <template #start>
-        <Button label="Empresa X" variant="link" class="" />
+        <Button label="Empresa X" variant="link" class="ml-4" />
       </template>
+
       <template #end>
-        <div class="menubar-end">
+        <div class="flex gap-4 items-center ml-auto p-4">
           <Button icon="pi pi-gift" variant="text" rounded size="small" aria-label="Filter" class="filter-button"
             @click="toggle" />
           <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none' }">
             <div class="flex flex-col gap-4">
-              <span style="color:aliceblue"> Recompensas </span>
-              <i class="pi pi-spin pi-star-fill" style="font-size: 1rem ; color: yellowgreen "></i>
+              <span class="text-white">Recompensas</span>
+              <i class="pi pi-spin pi-star-fill text-[yellowgreen] text-sm"></i>
             </div>
           </Popover>
-          <InputText placeholder="Search" type="text" class="search-input" />
-          <Button type="button" icon="pi pi-share-alt" label="Share" @click="toggle" />
-          <h2>Bienvenido, {{ username }}</h2>
+          <InputText placeholder="Search" type="text" class="bg-[#21333D] p-2 text-white" />
+          <h2 class="text-white text-base">Bienvenido, {{ username }}</h2>
           <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
-          <Button icon="pi pi-sign-out" @click="logout()" variant="text" rounded aria-label="Filter"
+          <Button icon="pi pi-sign-out" @click="logout()" variant="text" rounded aria-label="Logout"
             class="filter-button" />
         </div>
       </template>
     </Menubar>
-
-    <landPage></landPage>
 
     <div class="sidebar-container">
       <div class="sidebar">
@@ -124,11 +122,10 @@ onMounted(() => {
       <Notifications></Notifications>
     </Drawer>
     <Dialog v-model:visible="visibleChat" maximizable class="dialog"
-      :style="{ width: '50rem', height: '30rem', backgroundColor: '#04293C', padding: '1rem', border: 'none' }" 
-      :pt="{
+      :style="{ width: '50rem', height: '30rem', backgroundColor: '#04293C', padding: '1rem', border: 'none' }" :pt="{
         content: {
           class: 'h-[500px] overflow-y-auto'
-        } 
+        }
       }">
       <template #header>
         <span class="dialog-header">
@@ -136,7 +133,7 @@ onMounted(() => {
           Chat
         </span>
       </template>
-        <Chat></Chat>
+      <Chat></Chat>
     </Dialog>
   </div>
 </template>
@@ -186,7 +183,6 @@ onMounted(() => {
 .sidebar-container {
   display: flex;
   flex: 1;
-  padding-top: 4rem;
 }
 
 .sidebar {

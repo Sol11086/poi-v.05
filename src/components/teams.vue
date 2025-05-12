@@ -32,12 +32,14 @@ const call = ref(false);
 </script>
 
 <template>
-    <div class="header">
-        <span class="header-title">
+    <div class="bg-[#04293C] text-[#b1a7d3] flex items-center 
+    justify-between h-16 px-5 mb-4">
+        <span class=" text-xl font-bold ">
             <i class="pi pi-users"></i>
             Equipos
         </span>
-        <Button label="Crear nuevo equipo" @click="showCreateTeam = true" class="create-team-button" />
+        <Button label="Crear nuevo equipo" size="small" @click="showCreateTeam = true" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+        rounded-full hover:bg-[#9F86F9] hover:text-white" />
     </div>
 
     <div class="team-grid">
@@ -174,24 +176,24 @@ const call = ref(false);
 
 .waiting-container {
     display: flex;
-    flex-direction: column;  /* Hace que el ícono esté encima del texto */
-    align-items: center;     /* Centra los elementos horizontalmente */
-    justify-content: center; /* Centra los elementos verticalmente */
-    background-color: #000000; /* Fondo negro */
-    color: white;            /* Texto blanco */
-    height: 100vh;           /* Ocupa toda la altura de la ventana */
-    width: 100%;             /* Ocupa todo el ancho */
-    text-align: center;      /* Centra el texto */
+    flex-direction: column;  
+    align-items: center;     
+    justify-content: center; 
+    background-color: #000000; 
+    color: white;            
+    height: 100vh;           
+    width: 100%;             
+    text-align: center;      
 }
 
 .waiting-container i {
-    font-size: 3rem;         /* Tamaño del ícono */
-    margin-bottom: 1rem;     /* Espacio entre el ícono y el texto */
+    font-size: 3rem;         
+    margin-bottom: 1rem;     
 }
 
 .waiting-container span {
-    font-size: 1.5rem;       /* Tamaño del texto */
-    font-weight: bold;       /* Peso del texto */
+    font-size: 1.5rem;       
+    font-weight: bold;       
 }
 
 
@@ -200,7 +202,7 @@ const call = ref(false);
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    /* Esta es la conversión de gap-2 (0.5rem) */
+    
 }
 
 
@@ -243,16 +245,16 @@ const call = ref(false);
     border: 2px solid #063611;
 }
 
-/* Header */
+
 .header {
     display: flex;
     background-color: #04293C;
-    /* Matrích Blue */
+    
     height: 4rem;
-    /* 16 in Tailwind */
+    
     width: 100%;
     padding: 0 1.25rem;
-    /* px-5 */
+    
     justify-content: space-between;
     align-items: center;
 }
@@ -260,13 +262,13 @@ const call = ref(false);
 .header-title {
     display: flex;
     gap: 1.25rem;
-    /* gap-5 */
+    
     font-weight: 500;
-    /* font-medium */
+    
     font-size: 1.5rem;
-    /* text-2xl */
+    
     color: #9F86F9;
-    /* Lavander */
+    
     align-items: center;
 }
 
@@ -274,119 +276,118 @@ const call = ref(false);
     border-radius: 9999px;
     background-color: transparent;
     color: #9F86F9;
-    /* Lavander */
+    
     border: 1px solid #9F86F9;
-    /* Lavender border */
+    
 }
 
 .create-team-button:hover {
     background-color: #9F86F9;
-    /* Lavander */
+    
     color: white;
 }
 
-/* Team Grid */
+
 .team-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    /* grid-cols-2 */
+    
     gap: 1.5rem;
-    /* gap-6 */
+    
     padding: 1.5rem;
-    /* p-6 */
+    
 }
 
 @media (min-width: 768px) {
     .team-grid {
         grid-template-columns: repeat(3, 1fr);
-        /* md:grid-cols-3 */
+        
     }
 }
 
 @media (min-width: 1024px) {
     .team-grid {
         grid-template-columns: repeat(4, 1fr);
-        /* lg:grid-cols-4 */
+        
     }
 }
 
-/* Team Card */
 .team-card {
     background-color: #04293C;
-    /* bg-gray-800 */
+    
     border-radius: 0.5rem;
-    /* rounded-lg */
+    
     padding: 1rem;
-    /* p-4 */
+    
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    /* shadow-md */
+    
     text-align: center;
 }
 
 .team-image {
     width: 100%;
     height: 10rem;
-    /* h-40 */
+    
     object-fit: cover;
     border-radius: 0.5rem;
-    /* rounded-lg */
+    
 }
 
 .team-name {
     color: white;
     margin-top: 0.5rem;
-    /* mt-2 */
+    
 }
 
 .team-actions {
     display: flex;
     justify-content: center;
     gap: 1rem;
-    /* gap-4 */
+    
     margin-top: 0.75rem;
-    /* mt-3 */
+    
 }
 
 .action-button {
     color: #129E82;
-    /* text-primary-500 */
+    
 }
 
 .action-button:hover {
     background-color: transparent;
     color: #044134;
-    /* text-pomonaGreen */
+    
 }
 
-/* Dialog */
+
 .create-team-dialog {
     background-color: #1B2A1D;
-    /* Dark Green */
+    
     border: 1px solid #129E82;
-    /* Pomona Green */
+    
 }
 
 .dialog-description {
     color: #B0B0B0;
-    /* text-surface-500 */
+    
     margin-bottom: 2rem;
-    /* mb-8 */
+   
 }
 
 .input-group {
     display: flex;
     align-items: center;
     gap: 1rem;
-    /* gap-4 */
+    
     margin-bottom: 1rem;
-    /* mb-4 */
+   
 }
 
 .input-label {
     font-weight: 600;
-    /* font-semibold */
+    
     width: 6rem;
-    /* w-24 */
+    
     color: rgb(224, 224, 227)
 }
 
@@ -398,29 +399,29 @@ const call = ref(false);
     color: black;
 }
 
-/* MultiSelect */
+
 .multi-select {
     width: 100%;
     max-width: 20rem;
-    /* md:w-80 */
+    
     background-color: rgb(227, 227, 227);
-    /* bg-gunMetal */
+    
     border: none;
     border-radius: 9999px;
-    /* rounded-full */
+    
 }
 
 .multi-select-header {
     font-weight: 500;
     padding: 0.5rem 1rem;
-    /* px-3 py-2 */
+    
 }
 
 .multi-select-footer {
     display: flex;
     justify-content: space-between;
     padding: 1rem;
-    /* p-3 */
+   
     border: none;
 }
 
@@ -431,36 +432,36 @@ const call = ref(false);
 
 .multi-select-option img {
     width: 1.125rem;
-    /* w-4 */
+    
     margin-right: 0.5rem;
-    /* mr-2 */
+   
 }
 
-/* Dialog Actions */
+
 .dialog-actions {
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
-    /* gap-2 */
+   
 }
 
 .cancel-button {
     border-radius: 9999px;
-    /* rounded-full */
+    
     border: 1px solid #E74C3C;
-    /* error */
+   
     color: #E74C3C;
-    /* error */
+ 
     background-color: transparent;
 }
 
 .cancel-button-phone {
     border-radius: 9999px;
-    /* rounded-full */
+    
     border: none;
-    /* error */
+   
     color: #E74C3C;
-    /* error */
+   
     background-color: transparent;
 }
 
@@ -470,12 +471,12 @@ const call = ref(false);
 
 .cancel-button:hover {
     background-color: #E74C3C;
-    /* error */
+   
     color: white;
 }
 
 .create-button {
     border-radius: 9999px;
-    /* rounded-full */
+   
 }
 </style>
