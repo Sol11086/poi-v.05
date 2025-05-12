@@ -5,99 +5,87 @@ import { ref } from 'vue'
 </script>
 
 <template>
- <Card class="custom-card">
-    <template #content>
-        <div class="custom-content">
-            <div class="custom-avatar">
-                <Avatar
-                    image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"
-                />
+    <Card class="bg-[#1a1d22] p-2">
+        <template #content>
+            <div class="custom-content">
+                <div class="custom-avatar">
+                    <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
+                </div>
+                <div class="content-text">
+                    <p class="user-name"> Usuario 1 </p>
+                    <p class="task-description"> A subido una tarea a este grupo </p>
+                </div>
             </div>
-            <div class="content-text">
-                <p class="user-name"> Usuario 1 </p>
-                <p class="task-description"> A subido una tarea a este grupo </p>
+        </template>
+        <template #footer>
+            <div class="custom-footer">
+                <small> martes 15:32 </small>
             </div>
-        </div>
-    </template>
-    <template #footer>
-        <div class="custom-footer">
-            <small> martes 15:32 </small>
-        </div>
-    </template>
-</Card>
+        </template>
+    </Card>
 
-<Card class="custom-card">
-    <template #content>
-        <div class="custom-content">
-            <div class="custom-avatar">
-                <Avatar
-                    image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"
-                />
+    <Card class="custom-card">
+        <template #content>
+            <div class="custom-content">
+                <div class="custom-avatar">
+                    <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
+                </div>
+                <div class="content-text">
+                    <p class="user-name"> Usuario 1 </p>
+                    <p class="task-description"> A subido una tarea a este grupo </p>
+                </div>
             </div>
-            <div class="content-text">
-                <p class="user-name"> Usuario 1 </p>
-                <p class="task-description"> A subido una tarea a este grupo </p>
+        </template>
+        <template #footer>
+            <div class="custom-footer">
+                <small> martes 15:32 </small>
             </div>
-        </div>
-    </template>
-    <template #footer>
-        <div class="custom-footer">
-            <small> martes 15:32 </small>
-        </div>
-    </template>
-</Card>
+        </template>
+    </Card>
 
-<Card class="custom-card">
-    <template #content>
-        <div class="custom-content">
-            <div class="custom-avatar">
-                <Avatar
-                    image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"
-                />
+    <Card class="custom-card">
+        <template #content>
+            <div class="custom-content">
+                <div class="custom-avatar">
+                    <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
+                </div>
+                <div class="content-text">
+                    <p class="user-name"> Usuario 1 </p>
+                    <p class="task-description"> A subido una tarea a este grupo </p>
+                </div>
             </div>
-            <div class="content-text">
-                <p class="user-name"> Usuario 1 </p>
-                <p class="task-description"> A subido una tarea a este grupo </p>
+        </template>
+        <template #footer>
+            <div class="custom-footer">
+                <small> martes 15:32 </small>
             </div>
-        </div>
-    </template>
-    <template #footer>
-        <div class="custom-footer">
-            <small> martes 15:32 </small>
-        </div>
-    </template>
-</Card>
+        </template>
+    </Card>
 
-<Card class="custom-card">
-    <template #content>
-        <div class="custom-content">
-            <div class="custom-avatar">
-                <Avatar
-                    image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                    shape="circle"
-                />
+    <Card class="custom-card">
+        <template #content>
+            <div class="custom-content">
+                <div class="custom-avatar">
+                    <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
+                </div>
+                <div class="content-text">
+                    <p class="user-name"> Usuario 1 </p>
+                    <p class="task-description"> A subido una tarea a este grupo </p>
+                </div>
             </div>
-            <div class="content-text">
-                <p class="user-name"> Usuario 1 </p>
-                <p class="task-description"> A subido una tarea a este grupo </p>
+        </template>
+        <template #footer>
+            <div class="custom-footer">
+                <small> martes 15:32 </small>
             </div>
-        </div>
-    </template>
-    <template #footer>
-        <div class="custom-footer">
-            <small> martes 15:32 </small>
-        </div>
-    </template>
-</Card>
+        </template>
+    </Card>
 </template>
 
 <style scoped>
-
 .custom-card {
-    background-color: #1a1d22; /* rich black */
+    background-color: #1a1d22;
+    /* rich black */
     padding: 0;
     margin-bottom: 1rem;
     height: 10rem;
@@ -121,11 +109,13 @@ import { ref } from 'vue'
 .user-name {
     font-size: 1.25rem;
     font-weight: bold;
-    color: #d1d5db; /* Surface color */
+    color: #d1d5db;
+    /* Surface color */
 }
 
 .task-description {
-    color: #d1d5db; /* Surface color */
+    color: #d1d5db;
+    /* Surface color */
 }
 
 .custom-footer {
@@ -138,9 +128,10 @@ import { ref } from 'vue'
 }
 
 .search-input {
-  width: 25rem;
-  border-radius: 9999px;
-  background-color: #21333D; /* Gunmetal color */
-  border: none;
+    width: 25rem;
+    border-radius: 9999px;
+    background-color: #21333D;
+    /* Gunmetal color */
+    border: none;
 }
 </style>

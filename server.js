@@ -29,7 +29,7 @@ const connection = mysql.createConnection({
     user: 'root',          // usuario de la base de datos
     password: '',  // contraseña
     database: 'db_poi_v1', // nombre de la base de datos
-    port: 33065             // puerto donde está corriendo MySQL (por defecto 3306)
+    port: 3306     // puerto donde está corriendo MySQL (por defecto 3306)
 });
 
 // Conectar a la base de datos

@@ -86,7 +86,8 @@ onMounted(() => {
           <Button type="button" icon="pi pi-share-alt" label="Share" @click="toggle" />
           <h2>Bienvenido, {{ username }}</h2>
           <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
-          <Button icon="pi pi-sign-out" @click="logout()" variant="text" rounded aria-label="Filter" class="filter-button" />
+          <Button icon="pi pi-sign-out" @click="logout()" variant="text" rounded aria-label="Filter"
+            class="filter-button" />
         </div>
       </template>
     </Menubar>
@@ -111,7 +112,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <Drawer v-model:visible="visibleNotis" header="Notificaciones" class="drawer"
+    <Drawer v-model:visible="visibleNotis" header="Notificaciones" class="p-4"
       :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none', width: '25rem' }"
       pt:mask:class="backdrop-blur-sm">
       <template #header>
@@ -123,14 +124,19 @@ onMounted(() => {
       <Notifications></Notifications>
     </Drawer>
     <Dialog v-model:visible="visibleChat" maximizable class="dialog"
-      :style="{ left: '4rem', backgroundColor: '#04293C' }">
+      :style="{ width: '50rem', height: '30rem', backgroundColor: '#04293C', padding: '1rem', border: 'none' }" 
+      :pt="{
+        content: {
+          class: 'h-[500px] overflow-y-auto'
+        } 
+      }">
       <template #header>
         <span class="dialog-header">
           <i class="pi pi-comments"></i>
           Chat
         </span>
       </template>
-      <Chat></Chat>
+        <Chat></Chat>
     </Dialog>
   </div>
 </template>
@@ -239,6 +245,9 @@ onMounted(() => {
 .dialog {
   background-color: #04293C;
   border-color: #39b54a;
+  width: 10rem;
+  height: 10rem;
+  padding: 4rem;
   /* Pomona Green */
 }
 

@@ -128,8 +128,7 @@ onUnmounted(() => {
 <style scoped>
 .chat-container {
     display: flex;
-    height: 24rem;
-    /* 96rem en Tailwind */
+    height: 100%;
 }
 
 .sidebar {
@@ -141,6 +140,7 @@ onUnmounted(() => {
     padding: 1rem;
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
 .sidebar-title {
@@ -167,7 +167,6 @@ onUnmounted(() => {
 
 .user-item:hover {
     background-color: #2F3339;
-    /* Color hover similar a bg-gray-800 */
 }
 
 .user-avatar {
@@ -177,7 +176,8 @@ onUnmounted(() => {
     margin-right: 0.75rem;
     /* gap-3 */
 }
-.unread-badge{
+
+.unread-badge {
     background-color: #10B981;
     color: #D1D5DB;
     width: 2vh;
@@ -185,8 +185,10 @@ onUnmounted(() => {
     border-radius: 50%;
     text-align: center;
 }
+
 .chat-area {
-    width: 75%;
+    width: 100%;
+    height: 100%;
     /* 3/4 de ancho */
     display: flex;
     flex-direction: column;
@@ -225,7 +227,7 @@ onUnmounted(() => {
 
 .message-container {
     flex: 1;
-    max-height: 24rem;
+    height: 100%;
     /* max-h-96 */
     padding: 1rem;
     overflow-y: auto;
@@ -248,6 +250,8 @@ onUnmounted(() => {
 
 .message-sent {
     background-color: #129E82;
+    word-break: break-word;
+    white-space: pre-wrap;
     /* bg-primary-500 */
     color: white;
 }

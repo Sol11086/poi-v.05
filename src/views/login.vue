@@ -129,6 +129,7 @@ input,
     border: 1px solid #ccc;
     outline: none;
     width: 100%;
+    color:#011823
 }
 
 /* Ajusta el input dentro del componente Password */
