@@ -24,9 +24,15 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     cors: true,
+    //-- ARCHIVOS DONDE SE DEBAN CAMBIAR --
+    // * login.vue
+    // * teams.vue
+    // *
+    //  
+    
     // ESTA ES LA CLAVE: permitir el host de ngrok explícitamente
     allowedHosts: [
-      '230a-2806-230-4043-c126-10bf-8299-9f3a-7272.ngrok-free.app'// Cambiar por el host de ngrok se esté usando
+      '02e2-2806-230-4043-c126-650e-8e58-cb04-5c6b.ngrok-free.app'// Cambiar por el host de ngrok se esté usando
     ],
   },
 })

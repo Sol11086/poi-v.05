@@ -47,6 +47,22 @@ connection.query('SELECT * FROM users', (err, results) => {
     console.log('Resultados de la consulta:', results);
 });
 
+// Middleware to verify JWT 
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (token == null) return res.sendStatus(401); // if there isn't any token
+
+    jwt.verify(token, 'tu_clave_secreta', (err, user) => {
+        if (err) {
+            console.error("JWT verification error:", err);
+            return res.sendStatus(403); // invalid token
+        }
+        req.user = user; // Add user payload to request
+        next(); // proceed to the next middleware or route handler
+    });
+};
 
 // Endpoint para la autenticación de usuarios
 app.post('/login', (req, res) => {
@@ -66,7 +82,7 @@ app.post('/login', (req, res) => {
         // Verificar contraseña
         if (user.password === password) {
             // Generar un token JWT
-            const token = jwt.sign({ id: user.id, username: user.username }, 'tu_clave_secreta', { expiresIn: '1h' });
+            const token = jwt.sign({ id: user.id, username: user.username }, 'tu_clave_secreta', { expiresIn: '24h' });
 
             // Imprimir el token en consola para verificar su contenido
             console.log("Token generado:", token); // Esto te permitirá ver el token completo
@@ -147,6 +163,46 @@ app.post('/api/teams', async (req, res) => { // O router.post('/', ...
     } catch (error) {
         console.error("Error en POST /api/teams:", error);
         res.status(500).json({ success: false, error: "Error del servidor." });
+    }
+});
+
+app.get('/api/my-teams', authenticateToken, async (req, res) => {
+    const userId = req.user.id; // Extracted from JWT by authenticateToken middleware
+
+    if (!userId) {
+        return res.status(400).json({ success: false, error: "User ID not found in token." });
+    }
+
+    try {
+        // First, get the team IDs the user is a member of
+        const memberOfQuery = 'SELECT team_id FROM team_members WHERE user_id = ?';
+        connection.query(memberOfQuery, [userId], (err, memberResults) => {
+            if (err) {
+                console.error("Error fetching user's team memberships:", err);
+                return res.status(500).json({ success: false, error: "Error fetching user's team memberships." });
+            }
+
+            if (memberResults.length === 0) {
+                return res.status(200).json({ success: true, teams: [] }); // User is not in any teams
+            }
+
+            const teamIds = memberResults.map(row => row.team_id);
+
+            // Now, fetch the details of those teams
+            // Ensure your teams table has all necessary fields like id, team_name, image, caption (description)
+            // The 'image' field in your teams table seems to store the path/URL
+            const teamsQuery = 'SELECT id, team_name, owner_id, image, caption FROM teams WHERE id IN (?)';
+            connection.query(teamsQuery, [teamIds], (teamErr, teamsResults) => {
+                if (teamErr) {
+                    console.error("Error fetching teams details:", teamErr);
+                    return res.status(500).json({ success: false, error: "Error fetching teams details." });
+                }
+                res.status(200).json({ success: true, teams: teamsResults });
+            });
+        });
+    } catch (error) {
+        console.error("Error in /api/my-teams:", error);
+        res.status(500).json({ success: false, error: "Server error while fetching teams." });
     }
 });
 

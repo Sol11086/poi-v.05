@@ -132,23 +132,10 @@ let selectedMembers = ref([]); // Para el MultiSelect
 const availableUsers = ref([
     // Ejemplo de formato, asumiendo que tus usuarios tienen 'id' y 'username'
     // Deberías obtener esta lista del servidor
-    // { id: 'user1_id_varchar10', username: 'Usuario Ejemplo 1', avatar: 'url_avatar_1' },
-    // { id: 'user2_id_varchar10', username: 'Usuario Ejemplo 2', avatar: 'url_avatar_2' },
+    { user_id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar_url: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
+    { user_id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar_url: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
 ]);
 
-// Simulación de carga de usuarios disponibles. En una app real, esto vendría del servidor.
-onMounted(async () => {
-    // Aquí deberías emitir un evento al servidor para obtener la lista de todos los usuarios
-    // y popular availableUsers. Por ejemplo:
-    // socket.emit('fetchAllUsers', (users) => {
-    // availableUsers.value = users.map(user => ({ id: user.id, name: user.username, code: user.id, avatar: user.avatar || 'default_avatar_url' }));
-    // });
-    // Ejemplo estático por ahora:
-    availableUsers.value = [
-        { user_id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar_url: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
-        { user_id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar_url: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
-    ];
-});
 
 
 function getOwnerId() {
@@ -210,7 +197,78 @@ const handleCreateTeam = async () => { // Convertir a async
 // showCreateTeam.value = true;
 // };
 
+const loading = ref(true);
+const error = ref(null);
 
+// Function to construct the full image URL if your 'equipo.image' stores relative paths
+// or just returns the path if it's already a full URL or placeholder identifier.
+const getImageUrl = (imagePath) => {
+    if (!imagePath) {
+        // Return a default placeholder if no image path is provided
+        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
+    }
+
+    if (imagePath === 'default_team_avatar.png') {
+        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
+    }
+    // Fallback for other cases, assuming imagePath might be a full URL or needs specific handling
+    let FinalPath = "/src/assets/" + imagePath;
+    return FinalPath;
+};
+
+
+onMounted(async () => {
+    try {
+        loading.value = true;
+        error.value = null;
+        const token = localStorage.getItem('user_token'); // Or however you store your token
+
+        if (!token) {
+            error.value = 'Authentication token not found. Please log in.';
+            // Optionally, redirect to login: router.push('/login');
+            loading.value = false;
+            return;
+        }
+
+        const response = await axios.get('http://localhost:3000/api/my-teams', { // Ensure the URL is correct
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        console.log(response);
+        if (response.data.success) {
+            equipos.value = response.data.teams.map(team => ({
+                id: team.id,
+                team_name: team.team_name,
+                image: team.image || 'default_team_avatar.png', // Use default if image is null/empty
+                caption: team.caption,
+                owner_id: team.owner_id
+                // map other necessary fields
+            }));
+        } else {
+            error.value = response.data.error || 'Failed to load teams.';
+        }
+    } catch (err) {
+        console.error('Error fetching teams:', err);
+        if (err.response) {
+            // Server responded with a status code that falls out of the range of 2xx
+            error.value = `Server error: ${err.response.status} - ${err.response.data.error || err.message}`;
+            if (err.response.status === 401 || err.response.status === 403) {
+                // Token might be invalid or expired, redirect to login
+                // router.push('/login');
+                error.value = 'Session expired or invalid. Please log in again.';
+            }
+        } else if (err.request) {
+            // The request was made but no response was received
+            error.value = 'No response from server. Please check your network connection.';
+        } else {
+            // Something happened in setting up the request that triggered an Error
+            error.value = `Error: ${err.message}`;
+        }
+    } finally {
+        loading.value = false;
+    }
+});
 
 
 
@@ -227,14 +285,23 @@ const handleCreateTeam = async () => { // Convertir a async
         rounded-full hover:bg-[#9F86F9] hover:text-white" />
     </div>
     <div class="h-full">
-        <div v-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
+        <div v-if="loading">Loading teams...</div>
+        <div v-else-if="error">Error loading teams: {{ error }}</div>
+        <div v-else-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
             <div v-for="equipo in equipos" :key="equipo.id"
                 class="bg-[#04293C] rounded-lg shadow-md hover:bg-[#163a4e] p-4 grid justify-center"
                 @click="generalId = equipo.id">
-                <img :src="equipo.urlImagen" alt="Equipo" class="team-image rounded" />
-                <p variant="link" class="flex justify-center items-center mt-2 font-bold text-[#9F86F9]">{{
-                    equipo.nombre }}</p>
-                <p class="flex justify-center items-center mt-2 text-gray-200 text-center">{{ equipo.description }}</p>
+                <div class="w-[500px] h-[500px] overflow-hidden relative rounded">
+                    <img :src="getImageUrl(equipo.image)" :alt="equipo.team_name"
+                        class="absolute w-full h-full object-cover" />
+                </div>
+                <p variant="link" class="flex justify-center items-center mt-2 font-bold text-[#9F86F9]">
+                    {{ equipo.team_name }}</p>
+                <p class="flex justify-center items-center mt-2 text-gray-200 text-center">{{ equipo.caption }}</p>
+
+                <div v-if="equipos.length === 0">
+                    You are not part of any teams yet.
+                </div>
                 <div class="justify-center flex display relative gap-4 mt-2">
                     <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
                         class="text-[#129E82] p-1" @click.stop="activeCallTeamId = equipo.id"
@@ -341,7 +408,7 @@ const handleCreateTeam = async () => { // Convertir a async
                 </Dialog>
             </div>
         </div>
-        <div v-else class="h-full" >
+        <div v-else class="h-full">
             <div v-if="selectedTeam" class="h-full">
                 <GeneralTeams :equipos="id"></GeneralTeams>
             </div>

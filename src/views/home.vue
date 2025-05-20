@@ -58,11 +58,11 @@ onMounted(() => {
   }
 });
 
-// function logout() {
-//   localStorage.removeItem('authToken');
-//   localStorage.removeItem('username');
-//   this.$router.push('/login'); // Redirige al login
-// }
+function logout() {
+  localStorage.removeItem('user_token');
+  localStorage.removeItem('username');
+  window.location.href="login";
+}
 
 </script>
 
