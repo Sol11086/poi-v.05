@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import Chat from "@/components/chat.vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
@@ -9,6 +9,8 @@ import { InputText } from "primevue";
 
 
 import { content, header } from "@primeuix/themes/aura/accordion";
+import GeneralTeams from "./GeneralTeams.vue";
+
 
 onMounted(() => {
     equipos.value = [
@@ -26,8 +28,11 @@ const countries = ref([
     { user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
 ]);
 
-
+const selectedTeam = computed(() => {
+    return equipos.value.find(equipo => equipo.id === generalId.value);
+});
 const equipos = ref<{ nombre: string; urlImagen: string }[]>([]);
+const generalId = ref(null);
 const activeCallTeamId = ref(null);
 const activeChatTeamId = ref(null);
 const callId = ref(false);
@@ -213,7 +218,7 @@ const handleCreateTeam = async () => { // Convertir a async
 
 <template>
     <div class="bg-[#04293C] text-[#b1a7d3] flex items-center 
-        justify-between h-16 px-5 mb-4">
+        justify-between h-16 px-5">
         <span class=" text-xl font-bold ">
             <i class="pi pi-users"></i>
             Equipos
@@ -223,8 +228,7 @@ const handleCreateTeam = async () => { // Convertir a async
     </div>
 
     <div class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
-        <div v-for="equipo in equipos" :key="equipo.id"
-            class="bg-[#04293C] rounded-lg shadow-md p-4 grid justify-center">
+        <div v-for="equipo in equipos" :key="equipo.id" class="bg-[#04293C] rounded-lg shadow-md p-4 grid justify-center">
             <img :src="equipo.urlImagen" alt="Equipo" class="team-image rounded" />
             <p class="flex justify-center items-center mt-2 font-bold text-[#9F86F9]">{{ equipo.nombre }}</p>
             <p class="flex justify-center items-center mt-2 text-gray-200">{{ equipo.description }}</p>
@@ -258,22 +262,22 @@ const handleCreateTeam = async () => { // Convertir a async
                     <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
                         <span class="text-gray-500"> Comenzar llamada </span>
                         <div class="relative w-fit h-fit">
-                            <Button icon="pi pi-phone" @click="callId = equipo.id"
-                                class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
-                            <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
-                                @click="callId = equipo.id"></i>
+                            <Button icon="pi pi-phone"  @click="callId = equipo.id"
+                                class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" 
+                                />
+                            <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"  @click="callId = equipo.id"></i>
                         </div>
                         <Button icon="pi pi-times" @click="activeCallTeamId = false"
                             class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
                     </div>
                 </template>
             </Dialog>
-            <Dialog :visible="callId === equipo.id" @update:visible="newValue => { if (!newValue) callId = null; }"
-                class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
-                    content: {
-                        class: 'p-4 h-full overflow-y-auto'
-                    }
-                }">
+            <Dialog :visible="callId === equipo.id"
+                @update:visible="newValue => { if (!newValue) callId = null; }" class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
+                content: {
+                    class: 'p-4 h-full overflow-y-auto'
+                }
+            }">
                 <template #header>
                     <div class="flex justify-between items-center">
                         <div class="p-4 flex justify-between items-center">
@@ -383,13 +387,10 @@ const handleCreateTeam = async () => { // Convertir a async
 </template>
 
 <style>
-/* --- Estilo del borde del checkbox cuando no está marcado --- */
 .p-checkbox-box {
     border: 1px solid #6B7280 !important;
     background-color: transparent !important;
-    /* Asegúrate de que el fondo sea transparente o un color específico */
     transition: background-color 0.2s ease, border-color 0.2s ease;
-    /* Transición suave */
 }
 
 .p-multiselect-chip.p-chip {
