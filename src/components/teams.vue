@@ -1,24 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import Chat from "@/components/chat.vue";
-
-const equipos = ref<{ nombre: string; urlImagen: string }[]>([]);
+import 'primeicons/primeicons.css'
+import socket from "@/utils/socket.js";
+import { parseJwt } from '@/utils/jwt.js';
+import { InputText } from "primevue";
+import { content, header } from "@primeuix/themes/aura/accordion";
 
 onMounted(() => {
-    // Simulamos la obtención de datos (antes en localStorage o Pinia)
     equipos.value = [
-        { nombre: "Equipo A", urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
-        { nombre: "Equipo B", urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
-        { nombre: "Equipo C", urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
-        { nombre: "Equipo D", urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
-        { nombre: "Equipo E", urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
-        { nombre: "Equipo F", urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
+        { id: 1, nombre: "Equipo A", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
+        { id: 2, nombre: "Equipo B", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
+        { id: 3, nombre: "Equipo C", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
+        { id: 4, nombre: "Equipo D", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
+        { id: 5, nombre: "Equipo E", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
+        { id: 6, nombre: "Equipo F", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
     ];
 });
 
-const showCreateTeam = ref(false);
-
-const selectedCountries = ref();
 const countries = ref([
     { name: 'Contacto 1', code: 'AU', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
     { name: 'Contacto 2', code: 'BR', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
@@ -26,14 +25,100 @@ const countries = ref([
     { name: 'Contacto 4', code: 'EG', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
 ]);
 
-const showGrupalChat = ref(false);
-const showLlamada = ref(false);
-const call = ref(false);
+
+const equipos = ref<{ nombre: string; urlImagen: string }[]>([]);
+const activeCallTeamId = ref(null);
+const activeChatTeamId = ref(null);
+const callId = ref(false);
+const showCreateTeam = ref(false);
+const selectedCountries = ref();
+const visibleRight = ref(false);
+const microphoneOn = ref(false);
+const cameraOn = ref(false);
+const audioOn = ref(false);
+
+// chat script
+
+socket.on("connect", () => {
+    console.log("Conectado al servidor con ID:", socket.id);
+});
+
+
+const token = localStorage.getItem('user_token');
+const username = parseJwt(token).username;
+
+const chats = ref([
+    { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { id: 2, name: 'María', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg' },
+    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png' }
+]);
+
+const selectedChat = ref(null);
+const messages = ref([]);
+const newMessage = ref('');
+
+//const room = ref(""); // implementar cuando se tenga conexión con la base
+const isJoined = ref(false);
+
+// Salir de la sala - implementar cuando el usuario abandone el grupo
+// const leaveRoom = (room) => {
+//   socket.emit("leaveRoom", room);
+// };
+
+// Resetear estado al salir de la sala
+socket.on("leftRoom", () => {
+    messages.value = [];
+    isJoined.value = false;
+    room.value = "";
+});
+
+// Escuchar mensajes previos cuando se une a una sala
+socket.on("previousMessages", (history) => {
+    messages.value = history;
+});
+
+const selectChat = (chat) => {
+    selectedChat.value = chat;
+    messages.value = [];
+    chat.unreadMessages = 0; // Resetear notificaciones
+    socket.emit("loadMessages", chat.id);
+};
+
+const sendMessage = () => {
+    if (newMessage.value.trim() === '') return;
+    socket.emit("sendMessage", {
+        room: selectedChat.value.id,//id del chat 
+        message: newMessage.value,
+        user: username || "Anónimo",
+    });
+    newMessage.value = '';
+};
+
+//Escuchar mensajes recibidos
+onMounted(() => {
+    const roomIds = chats.value.map(chat => chat.id); // Extrae solo los IDs de las salas
+    socket.emit("joinAllRooms", roomIds);
+
+    socket.on("receiveMessage", (message) => {
+        if (selectedChat.value && selectedChat.value.id === message.room) {
+            messages.value.push(message);
+        } else {
+            console.log(`Mensaje recibido en otra sala (${message.room}):`, message);
+            const chat = chats.value.find(c => c.id === message.room);
+            if (chat) chat.unreadMessages += 1; // Incrementa contador de mensajes no leídos
+        }
+    });
+});
+
+onUnmounted(() => {
+    socket.off("receiveMessage");
+});
+
 </script>
 
 <template>
     <div class="bg-[#04293C] text-[#b1a7d3] flex items-center 
-    justify-between h-16 px-5 mb-4">
+        justify-between h-16 px-5 mb-4">
         <span class=" text-xl font-bold ">
             <i class="pi pi-users"></i>
             Equipos
@@ -42,139 +127,213 @@ const call = ref(false);
         rounded-full hover:bg-[#9F86F9] hover:text-white" />
     </div>
 
-    <div class="team-grid">
-        <div v-for="equipo in equipos" :key="equipo.nombre" class="team-card">
-            <img :src="equipo.urlImagen" alt="Equipo" class="team-image" />
-            <p class="team-name">{{ equipo.nombre }}</p>
-            <div class="team-actions">
-                <Button icon="pi pi-bookmark" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                    class="action-button" />
+    <div class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
+        <div v-for="equipo in equipos" :key="equipo.id" class="bg-[#04293C] rounded-lg shadow-md p-4 grid justify-center">
+            <img :src="equipo.urlImagen" alt="Equipo" class="team-image rounded" />
+            <p class="flex justify-center items-center mt-2 font-bold text-[#9F86F9]">{{ equipo.nombre }}</p>
+            <p class="flex justify-center items-center mt-2 text-gray-200">{{ equipo.description }}</p>
+            <div class="justify-center flex gap-4 mt-2">
                 <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                    class="action-button" @click="showLlamada = true" />
-                <Dialog v-model:visible="showLlamada" class="custom-dialog"
-                    :style="{ left: '4rem', backgroundColor: '#04293C' }">
-                    <template #header>
-                        <span class="dialog-header">
-                            <i class="pi pi-comments"></i>
-                            Llamada grupal
-                        </span>
-                    </template>
-                    <div class="call-container">
-                        <span> Comenzar llamada </span>
-                        <Button icon="pi pi-phone" rounded aria-label="Responder" @click="call = true" />
-                        <Button icon="pi pi-times" severity="secondary" rounded aria-label="Bookmark"
-                            class="cancel-button" />
-                    </div>
-                </Dialog>
-                <Button icon="pi pi-comments" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                    @click="showGrupalChat = true" class="action-button" />
+                    class="text-[#129E82] p-1" @click="activeCallTeamId = equipo.id"
+                    v-tooltip.bottom="'Iniciar llamada'" />
+                <Button icon="pi pi-comments" @click="activeChatTeamId = equipo.id" class="text-[#129E82]"
+                    v-tooltip.bottom="'Abrir chat'" />
             </div>
-            <Dialog v-model:visible="showGrupalChat" maximizable class="custom-dialog"
-                :style="{ left: '4rem', backgroundColor: '#04293C' }">
+            <Dialog :visible="activeChatTeamId === equipo.id"
+                @update:visible="newValue => { if (!newValue) activeChatTeamId = null; }" maximizable class="dialogChat"
+                :style="{ width: '50rem', height: '30rem', backgroundColor: '#04293C', padding: '1rem', border: 'none' }"
+                :pt="{
+                    content: {
+                        class: 'h-[500px] overflow-y-auto'
+                    }
+                }">
                 <template #header>
-                    <span class="dialog-header">
+                    <span class="p-2 text-white text-xl">
                         <i class="pi pi-comments"></i>
-                        Grupo x
+                        Chat
                     </span>
                 </template>
                 <Chat></Chat>
             </Dialog>
-
-            <Dialog v-model:visible="call" header="Edit Profile"
-                :style="{ width: '90rem', height: '50rem', backgroundColor: '#04293C' }">
-                <template #header>
-                    <div class="inline-flex items-center justify-center gap-2">
-                        <span class="dialog-header-calls">Titulo de la llamada</span>
-                        <Button icon="pi pi-comment" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                            class="action-button" />
-                        <Button icon="pi pi-microphone" severity="secondary" variant="text" rounded
-                            aria-label="Bookmark" class="action-button" />
-                        <Button icon="pi pi-camera" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                            class="action-button" />
-                        <Button icon="pi pi-headphones" severity="secondary" variant="text" rounded
-                            aria-label="Bookmark" class="action-button" />
-                        <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                            class="cancel-button-phone" />
+            <Dialog :visible="activeCallTeamId === equipo.id"
+                @update:visible="newValue => { if (!newValue) activeCallTeamId = null; }" modal class="w-1/4 h-fit"
+                :style="{ backgroundColor: transparent }" pt:root:class="!border-0 !bg-transparent">
+                <template #container="{ closeCallback }">
+                    <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
+                        <span class="text-gray-500"> Comenzar llamada </span>
+                        <div class="relative w-fit h-fit">
+                            <Button icon="pi pi-phone"  @click="callId = equipo.id"
+                                class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" 
+                                />
+                            <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"  @click="callId = equipo.id"></i>
+                        </div>
+                        <Button icon="pi pi-times" @click="activeCallTeamId = false"
+                            class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
                     </div>
                 </template>
-                <div>
-                    <div class="waiting-container">
-                        <span> En espera </span>
+            </Dialog>
+            <Dialog :visible="callId === equipo.id"
+                @update:visible="newValue => { if (!newValue) callId = null; }" class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
+                content: {
+                    class: 'p-4 h-full overflow-y-auto'
+                }
+            }">
+                <template #header>
+                    <div class="flex justify-between items-center">
+                        <div class="p-4 flex justify-between items-center">
+                            <span class="text-white mr-2 font-bold">Titulo de la llamada</span>
+                            <Button icon="pi pi-comment" @click="visibleRight = !visibleRight" severity="secondary"
+                                variant="text" rounded aria-label="Bookmark"
+                                :class="visibleRight ? 'text-[#129E82]' : 'text-[#646466]'"
+                                v-tooltip.bottom="'Abrir chat grupal'" />
+                            <Button icon="pi pi-microphone" severity="secondary" variant="text" rounded
+                                aria-label="Bookmark" @click="microphoneOn = !microphoneOn"
+                                :class="microphoneOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                            <Button icon="pi pi-camera" severity="secondary" variant="text" rounded
+                                aria-label="Bookmark" @click="cameraOn = !cameraOn"
+                                :class="cameraOn ? 'text-[#129E82]' : 'text-[#646466]'" class="text-[#129E82]" />
+                            <Button icon="pi pi-headphones" severity="secondary" variant="text" rounded
+                                aria-label="Bookmark" class="text-[#129E82]" @click="audioOn = !audioOn"
+                                :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                        </div>
+                        <div>
+                            <Button severity="secondary" @click="callId = false" label="Colgar llamada"
+                                class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm font-light hover:bg-[#8a2222] hover:text-white" />
+                        </div>
+                    </div>
+                </template>
+                <div class="flex h-full">
+                    <div v-if="visibleRight" class="relative z-10 bg-[#04293C] h-full w-1/3">
+                        <div class="h-10/12">
+                            <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#081d27] p-4">
+                                <i class="pi pi-comment"></i>
+                                <div>
+                                    <p class="chat-header-status">Chat grupal</p>
+                                </div>
+                            </div>
+                            <div class="h-full bg-[#030d11] p-4">
+                                <div v-for="msg in messages" :key="msg.id"
+                                    :class="{ 'text-right': msg.user === username }" class="message-item">
+                                    <p class="message-text"
+                                        :class="msg.user === username ? 'message-sent' : 'message-received'">
+                                        {{ msg.message }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="bg-[#081d27] flex items-center justify-between p-4">
+                                <InputText v-model="newMessage" @keyup.enter="sendMessage"
+                                    placeholder="Escribe un mensaje..." class="bg-[#030d11] text-white p-2" />
+                                <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text"
+                                    rounded class="hover:text-[#129E82]" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
+                        <span class="text-xl"> En espera </span>
                         <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
                     </div>
                 </div>
-                <div>
-                    <Drawer v-model:visible="visibleRight" header="Right Drawer" position="right">
-                        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
-                            labore et
-                            dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi
-                            ut aliquip
-                            ex ea commodo consequat.</p>
-                    </Drawer>
-                </div>
-
             </Dialog>
-
         </div>
     </div>
 
-    <Dialog v-model:visible="showCreateTeam" class="create-team-dialog"
-        :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none' }">
+    <Dialog v-model:visible="showCreateTeam" modal class="w-1/3 h-fit p-2" :style="{ backgroundColor: '#04293C' }">
         <template #header>
-            <span class="header-title">
+            <span class="p-2 text-white text-xl">
                 <i class="pi pi-users"></i>
                 Nuevo equipo
             </span>
         </template>
-        <span class="dialog-description">Describe a tu equipo</span>
-        <div class="input-group">
-            <label for="username" class="input-label">Titulo</label>
-            <InputText id="username" class="input-field" autocomplete="off" />
+        <div class="p-2">
+            <span class="text-gray-300">Describe a tu equipo</span>
         </div>
-        <div class="input-group">
-            <label for="email" class="input-label">Descripcion</label>
-            <InputText id="email" class="input-field" autocomplete="off" />
+        <div class="p-y-5 grid w-full mt-5 gap-8">
+            <FloatLabel class="w-full">
+                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
+                <label for="over_label">Titulo del equipo</label>
+            </FloatLabel>
+            <FloatLabel class="w-full">
+                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
+                <label for="over_label">Descripción</label>
+            </FloatLabel>
+            <FloatLabel class="w-full">
+                <MultiSelect v-model="selectedCountries" :options="countries" optionLabel="name" display="chip"
+                    class="bg-[#081e29] p-2 text-white w-full"
+                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]">
+                    <template #option="slotProps">
+                        <div class="flex items-center h-1/6 p-2 text-gray-300">
+                            <img :alt="slotProps.option.name"
+                                src="https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg"
+                                :class="`flag flag-${slotProps.option.code.toLowerCase()} mr-2 h-5 `" />
+                            <div>{{ slotProps.option.name }}</div>
+                        </div>
+                    </template>
+                    <template #dropdownicon>
+                        <i class="pi pi-users" />
+                    </template>
+                </MultiSelect>
+                <label for="over_label">Integrantes seleccionados</label>
+            </FloatLabel>
         </div>
-        <div class="input-group">
-            <label for="email" class="input-label">Integrantes</label>
-            <MultiSelect v-model="selectedCountries" :options="countries" optionLabel="name" filter
-                placeholder="Selecciona los integrantes" display="chip" class="multi-select">
-                <template #option="slotProps">
-                    <div class="multi-select-option">
-                        <img :alt="slotProps.option.name"
-                            src="https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg"
-                            :class="`flag flag-${slotProps.option.code.toLowerCase()} mr-2`" />
-                        <div>{{ slotProps.option.name }}</div>
-                    </div>
-                </template>
-                <template #dropdownicon>
-                    <i class="pi pi-users" />
-                </template>
-                <template #filtericon>
-                    <i class="pi pi-user" />
-                </template>
-                <template #header>
-                    <div class="multi-select-header">Available Countries</div>
-                </template>
-                <template #footer>
-                    <div class="multi-select-footer">
-                        <Button label="Add New" severity="secondary" text size="small" icon="pi pi-plus" />
-                        <Button label="Remove All" severity="danger" text size="small" icon="pi pi-times" />
-                    </div>
-                </template>
-            </MultiSelect>
-        </div>
-        <div class="dialog-actions">
-            <Button type="button" class="cancel-button" label="Cancelar" severity="secondary"
-                @click="visible = false"></Button>
-            <Button type="button" class="create-button" label="Crear" @click="visible = false"></Button>
+        <div class="gap-4 flex justify-between mt-7">
+            <Button label="Crear nuevo equipo" size="small" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+                rounded-full hover:bg-[#9F86F9] hover:text-white" />
+            <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2 
+                rounded-full hover:bg-[#C13030] hover:text-white" />
         </div>
     </Dialog>
 </template>
 
-<style scoped>
+<style>
+/* --- Estilo del borde del checkbox cuando no está marcado --- */
+.p-checkbox-box {
+    border: 1px solid #6B7280 !important;
+    background-color: transparent !important;
+    /* Asegúrate de que el fondo sea transparente o un color específico */
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    /* Transición suave */
+}
 
-.waiting-container {
+.p-multiselect-chip.p-chip {
+    background-color: #129E82 !important;
+    color: white !important;
+}
+
+.p-multiselect-chip .p-chip-remove-icon {
+    color: white !important;
+}
+
+.p-multiselect-option {
+    background-color: #081e29;
+    color: #cbd5e0;
+    transition: background-color 0.2s ease;
+}
+
+.p-multiselect-option:hover {
+    background-color: #1a4d6b !important;
+    color: white !important;
+}
+
+
+.p-multiselect-option.p-highlight:hover {
+    background-color: #2c77a3 !important;
+    color: white !important;
+}
+
+.p-multiselect-option .flex.items-center {
+    background-color: transparent !important;
+}
+
+.dialogChat {
+    background-color: #04293C;
+    border-color: #39b54a;
+    width: 10rem;
+    height: 10rem;
+    padding: 4rem;
+    /* Pomona Green */
+}
+
+/*.waiting-container {
     display: flex;
     flex-direction: column;  
     align-items: center;     
@@ -478,5 +637,5 @@ const call = ref(false);
 .create-button {
     border-radius: 9999px;
    
-}
+}*/
 </style>

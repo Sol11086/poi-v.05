@@ -35,9 +35,9 @@ const showCreateHomework = ref(false);
                     </div>
                 </div>
             </template>
-            <template #icons >
-                    <span class="mr-10">Updated 2 hours ago</span>
-                    <Tag value="Pendiente" class="p-1 bg-[#9F86F9] mr-2"></Tag>
+            <template #icons>
+                <span class="mr-10">Updated 2 hours ago</span>
+                <Tag value="Pendiente" class="p-1 bg-[#9F86F9] mr-2"></Tag>
             </template>
             <p class="font-semibold text-gray-100 mt-4">
                 Descripcion de la tarea:
@@ -62,28 +62,33 @@ const showCreateHomework = ref(false);
         </Panel>
     </div>
 
-    <Dialog v-model:visible="showCreateHomework" class="custom-dialog"
-        :style="{ left: '4rem', backgroundColor: '#04293C' }">
+    <Dialog v-model:visible="showCreateHomework" modal class="w-1/3 h-fit p-2" :style="{ backgroundColor: '#04293C' }">
         <template #header>
-            <span class="dialog-header">
+            <span class="p-2 text-white text-xl">
                 <i class="pi pi-inbox"></i>
                 Nueva tarea
             </span>
         </template>
-        <span class="dialog-subtitle">Describe a tu tarea</span>
-        <div class="form-group">
-            <label for="username" class="form-label">Titulo</label>
-            <InputText id="username" class="form-input" autocomplete="off" />
+        <div class="p-2">
+            <span class="text-gray-300">Describe a tu tarea</span>
         </div>
-        <div class="form-group">
-            <label for="email" class="form-label">Descripcion</label>
-            <InputText id="email" class="form-input" autocomplete="off" />
+        <div class="p-2 grid w-full mt-5 gap-8">
+            <FloatLabel class="w-full">
+                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
+                <label for="over_label">Titulo de la tarea</label>
+            </FloatLabel>
+            <FloatLabel>
+                <Textarea id="over_label" v-model="value1" class="bg-[#081e29] p-1 text-white w-full" rows="5" cols="30" style="resize: none" />
+                <label for="over_label">Descripción</label>
+            </FloatLabel>
+            <div class="gap-4 flex justify-between">
+                <Button label="Crear nueva tarea" size="small" @click="showCreateHomework = true" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+                rounded-full hover:bg-[#9F86F9] hover:text-white" />
+                <Button label="Cancelar" size="small" @click="showCreateHomework = true" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2 
+                rounded-full hover:bg-[#C13030] hover:text-white" />
+            </div>
         </div>
-        <div class="dialog-actions">
-            <Button type="button" class="dialog-cancel" label="Cancelar" severity="secondary"
-                @click="visible = false"></Button>
-            <Button type="button" class="dialog-create" label="Crear" @click="visible = false"></Button>
-        </div>
+
     </Dialog>
 </template>
 

@@ -92,7 +92,7 @@ onMounted(() => {
       </template>
     </Menubar>
 
-    <div class="sidebar-container">
+    <div class="flex overflow-y-hidden">
       <div class="sidebar">
         <Button icon="pi pi-bell" variant="text" size="large" @click="visibleNotis = true" rounded
           class="sidebar-button" />
@@ -104,7 +104,8 @@ onMounted(() => {
           class="sidebar-button" />
       </div>
 
-      <div class="main-content">
+      <div class="flex-1 bg-[#010F16] text-white max-h-[calc(100vh-Xpx)] overflow-y-auto scr ml-16"
+        style="background-image: url('/src/assets/Group 39.png'); background-repeat: no-repeat; background-position: 120% 0.5%; background-size: 700px auto; background-attachment: fixed;">
         <Teams v-if="activeComponent === 'teams'" />
         <Homeworks v-if="activeComponent === 'homework'" />
       </div>
@@ -139,6 +140,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+
 .app-container {
   height: 100vh;
   display: flex;
@@ -180,11 +182,6 @@ onMounted(() => {
   /* Pomona Green */
 }
 
-.sidebar-container {
-  display: flex;
-  flex: 1;
-}
-
 .sidebar {
   background-color: #021F25;
   width: 4rem;
@@ -206,7 +203,7 @@ onMounted(() => {
   /* Pomona Green */
 }
 
-.main-content {
+/*.main-content {
   flex: 1;
   background: #010F16 url('/src/assets/Group 39.png') no-repeat;
   background-position: 120% 5%;
@@ -214,7 +211,7 @@ onMounted(() => {
   color: white;
   overflow: auto;
   margin-left: 4rem;
-}
+}*/
 
 .drawer {
   width: 100%;
