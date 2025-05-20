@@ -11,17 +11,19 @@ socket.on("connect", () => {
 
 const token = localStorage.getItem('user_token');
 const username = parseJwt(token).username;
+const user_id = parseJwt(token).id;
+console.log(user_id);
 
 const chats = ref([
-    { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { id: 2, name: 'María', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg' },
-    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png' }
+    { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private'},
+    { id: 2, name: 'María', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private'},
+    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png',type:'channel'}
 ]);
 
 const selectedChat = ref(null);
 const messages = ref([]);
 const newMessage = ref('');
-
+const currentRoomType = ref('');
 //const room = ref(""); // implementar cuando se tenga conexión con la base
 const isJoined = ref(false);
 
@@ -45,16 +47,23 @@ socket.on("previousMessages", (history) => {
 const selectChat = (chat) => {
     selectedChat.value = chat;
     messages.value = [];
+    currentRoomType.value = chat.type;
     chat.unreadMessages = 0; // Resetear notificaciones
-    socket.emit("loadMessages", chat.id);
+    // Ejemplo en el cliente (Vue) para cargar mensajes
+    socket.emit("loadMessages", {
+        room: selectedChat.value.id,
+        roomType: currentRoomType.value // 'private' o 'channel'
+    });
 };
 
 const sendMessage = () => {
     if (newMessage.value.trim() === '') return;
+    
     socket.emit("sendMessage", {
         room: selectedChat.value.id,//id del chat 
         message: newMessage.value,
-        user: username || "Anónimo",
+        sender_id: user_id || "Anónimo",
+        roomType: currentRoomType.value // 'private' o 'channel'
     });
     newMessage.value = '';
 };
