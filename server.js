@@ -1,4 +1,4 @@
-import express from "express";
+import express, { response } from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import crypto from 'crypto';
@@ -11,7 +11,7 @@ const app = express();
 // Permitir solicitudes desde ngrok (temporalmente acepta todos para pruebas)
 app.use(cors({
     origin: '*', // Cambiar a dominio estando en producción
-  }))
+}))
 
 app.use(express.json()); // Para parsear JSON en el cuerpo de las solicitudes
 const server = createServer(app);
@@ -62,7 +62,7 @@ app.post('/login', (req, res) => {
         }
 
         const user = result[0];
-        
+
         // Verificar contraseña
         if (user.password === password) {
             // Generar un token JWT
@@ -82,7 +82,86 @@ app.post('/login', (req, res) => {
 
 // connection.end(); // Cerrar la conexión a la base de datos al finalizar
 //----------- FIN DE LA CONFIGURACION DE LA BASE DE DATOS ----------
+// NEW: Handler to get or create a team channel
+async function ManejarTeamChannel_Promise({ team_id, channel_name }) {
+    return new Promise((resolve, reject) => {
+        if (!team_id || !channel_name) {
+            return reject(new Error("team_id and channel_name are required for team channel."));
+        }
 
+        const findQuery = 'SELECT id FROM team_channels WHERE team_id = ? AND channel_name = ?';
+        connection.query(findQuery, [team_id, channel_name], (err, results) => {
+            if (err) {
+                console.error("Error finding team channel:", err);
+                return reject(new Error("Error finding team channel."));
+            }
+            if (results.length > 0) {
+                resolve({ success: true, channel_id: results[0].id, created: false });
+            } else {
+                const newChannelId = generateVarchar15ID();
+                const insertQuery = 'INSERT INTO team_channels (id, team_id, channel_name) VALUES (?, ?, ?)';
+                connection.query(insertQuery, [newChannelId, team_id, channel_name], (insertErr) => {
+                    if (insertErr) {
+                        console.error("Error creating team channel:", insertErr);
+                        let errMsg = "Error creating team channel.";
+                        if (insertErr.errno === 1452) {
+                            errMsg = `Error creating team channel: Team ID ${team_id} does not exist.`;
+                            console.error(errMsg);
+                        }
+                        return reject(new Error(errMsg));
+                    }
+                    console.log(`Team channel created: ${channel_name} in team ${team_id} with ID ${newChannelId}`);
+                    resolve({ success: true, channel_id: newChannelId, created: true });
+                });
+            }
+        });
+    });
+}
+
+// NEW: Handler to get or create a private chat
+function ManejarPrivateChannel_Promise({ user1_id, user2_id }) { // Renombrada para indicar que devuelve Promesa
+    return new Promise((resolve, reject) => {
+        if (!user1_id || !user2_id) {
+            // Usamos reject para errores que impiden continuar
+            return reject(new Error("user1_id and user2_id are required."));
+        }
+        if (user1_id === user2_id) {
+            return reject(new Error("Cannot create a private chat with oneself."));
+        }
+
+        const u1 = user1_id < user2_id ? user1_id : user2_id;
+        const u2 = user1_id < user2_id ? user2_id : user1_id;
+
+        const findQuery = 'SELECT id FROM private_chats WHERE (user1_id = ? AND user2_id = ?)';
+        connection.query(findQuery, [u1, u2], (err, results) => {
+            if (err) {
+                console.error("Error finding private chat:", err);
+                return reject(new Error("Error finding private chat."));
+            }
+
+            if (results.length > 0) {
+                // Usamos resolve para el resultado exitoso
+                resolve({ success: true, chat_id: results[0].id, created: false });
+            } else {
+                const newChatId = generateMessageID();
+                const insertQuery = 'INSERT INTO private_chats (id, user1_id, user2_id) VALUES (?, ?, ?)';
+                connection.query(insertQuery, [newChatId, u1, u2], (insertErr) => {
+                    if (insertErr) {
+                        console.error("Error creating private chat:", insertErr);
+                        let errMsg = "Error creating private chat.";
+                        if (insertErr.errno === 1452) {
+                            errMsg = `Error creating private chat: One or both User IDs (${u1}, ${u2}) do not exist.`;
+                            console.error(errMsg);
+                        }
+                        return reject(new Error(errMsg));
+                    }
+                    console.log(`Private chat created between ${u1} and ${u2} with id ${newChatId}`);
+                    resolve({ success: true, chat_id: newChatId, created: true });
+                });
+            }
+        });
+    });
+}
 //---------------------Socket.io-------------------------
 // Ya no se usará 'salas' para almacenar mensajes en memoria, se usará la BD.
 // const salas = {};
@@ -104,68 +183,102 @@ io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
     // Escuchar mensajes, guardarlos en la BD y enviarlos a la sala
-    socket.on("sendMessage", ({ room, message, sender_id, roomType }) => {
-        // IMPORTANTE: El cliente debe enviar 'sender_id' (el ID del usuario de la tabla 'users')
-        // y 'roomType' ('private' o 'channel')
-        if (!sender_id || !message || !room || !roomType) {
-            console.error("Faltan datos para guardar el mensaje:", { room, message, sender_id, roomType });
-            // Podrías emitir un error al cliente aquí si lo deseas
-            return;
+    socket.on("sendMessage", async ({ room, message, sender_id, receiver_id, team_id, channel_name, roomType }) => {
+        // 'room' podría ser el ID si ya se conoce, o podríamos ignorarlo y depender de los otros params.
+        // Para este ejemplo, asumimos que para canales, el cliente podría enviar team_id y channel_name.
+        // Para privados, sender_id (quien envía) y receiver_id (el otro participante).
+
+        if (!sender_id || !message || !roomType) {
+            console.error("Faltan datos para guardar el mensaje (sender_id, message, roomType):", { sender_id, message, roomType });
+            return socket.emit('messageError', { message: 'Faltan datos esenciales para el mensaje.' });
         }
 
-        const messageId = generateMessageID();
+        const messageId = generateMessageID(); // O tu generateMessageID
         const createdAt = new Date();
-        
         let chatIdValue = null;
         let teamChannelIdValue = null;
+        let actualRoomIdForEmit = room; // Para saber a qué sala de socket.io emitir
 
-        if (roomType === 'private') {
-            chatIdValue = room;
-        } else if (roomType === 'channel') {
-            teamChannelIdValue = room;
-        } else {
-            console.error("Tipo de sala no válido:", roomType);
-            // Emitir error al cliente
-            socket.emit('messageError', { message: 'Tipo de sala no válido proporcionado.' });
-            return;
-        }
-
-        const query = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES (?, ?, ?, ?, ?, ?)';
-        const values = [messageId, sender_id, chatIdValue, teamChannelIdValue, message, createdAt];
-
-        connection.query(query, values, (err, result) => {
-            if (err) {
-                console.error('Error al guardar el mensaje en la BD:', err);
-                // Emitir error al cliente si es necesario
-                socket.emit('messageError', { message: 'Error al guardar el mensaje.' });
-                return;
-            }
-            console.log("Mensaje guardado en la BD con ID:", messageId);
-
-            // Para enviar el mensaje a los clientes, necesitamos el nombre de usuario.
-            // Hacemos una consulta rápida para obtenerlo.
-            connection.query('SELECT username FROM users WHERE id = ?', [sender_id], (errUser, userResult) => {
-                if (errUser || userResult.length === 0) {
-                    console.error('Error al obtener el nombre de usuario para el mensaje:', errUser);
-                    // Emitir el mensaje sin nombre de usuario o con un placeholder
-                    const newMessageForRoom = { id: messageId, user: { id: sender_id, username: 'Desconocido' }, message, room, roomType, time: createdAt.toLocaleTimeString() };
-                    io.to(room).emit("receiveMessage", newMessageForRoom);
-                    return;
+        try {
+            if (roomType === 'private') {
+                if (!receiver_id) {
+                    console.error("Falta receiver_id para chat privado");
+                    return socket.emit('messageError', { message: 'Falta el destinatario para el chat privado.' });
                 }
+                const privateChatResponse = await ManejarPrivateChannel_Promise({ user1_id: sender_id, user2_id: receiver_id });
+                if (!privateChatResponse.success) throw new Error(privateChatResponse.error || "Failed to get/create private chat");
+                chatIdValue = privateChatResponse.chat_id;
 
-                const username = userResult[0].username;
-                const newMessageForRoom = {
-                    id: messageId, // ID del mensaje
-                    user: { id: sender_id, username: username }, // Información del remitente
-                    message: message, // Contenido del mensaje
-                    room: room, // ID de la sala (chat_id o team_channel_id)
-                    roomType: roomType, // Tipo de sala
-                    created_at: createdAt, // Fecha de creación (para orden y visualización)
-                    time: createdAt.toLocaleTimeString() // Solo la hora para visualización rápida si se necesita
-                };
-                io.to(room).emit("receiveMessage", newMessageForRoom);
+            } else if (roomType === 'channel') {
+                // El cliente debe enviar team_id y channel_name para canales
+                // O, si 'room' ya es un channel_id validado, se podría usar directamente.
+                // Asumamos que el cliente envía team_id y channel_name
+                if (!team_id || !channel_name) { // O si usas 'room' como ID de canal directo, !room
+                    console.error("Faltan team_id o channel_name para chat de canal");
+                    return socket.emit('messageError', { message: 'Faltan datos para identificar el canal.' });
+                }
+                const teamChannelResponse = await ManejarTeamChannel_Promise({ team_id, channel_name });
+                if (!teamChannelResponse.success) throw new Error(teamChannelResponse.error || "Failed to get/create team channel");
+                teamChannelIdValue = teamChannelResponse.channel_id;
+
+            } else {
+                console.error("Tipo de sala no válido:", roomType);
+                return socket.emit('messageError', { message: 'Tipo de sala no válido proporcionado.' });
+            }
+
+            // --- Lógica común para insertar el mensaje ---
+            const query = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES (?, ?, ?, ?, ?, ?)';
+            const values = [messageId, sender_id, chatIdValue, teamChannelIdValue, message, createdAt];
+
+            // Para usar await con connection.query, necesitas "promisificarlo"
+            // Opción A: Usar una librería como mysql2/promise
+            // Opción B: Envolver la llamada en new Promise (como haremos aquí para el ejemplo)
+            // Opción C: Usar util.promisify de Node.js
+
+            await new Promise((resolve, reject) => {
+                connection.query(query, values, (err, result) => {
+                    if (err) {
+                        console.error('Error al guardar el mensaje en la BD:', err);
+                        let clientErrorMsg = 'Error al guardar el mensaje.';
+                        if (err.errno === 1452) { // Error de FK
+                            clientErrorMsg = `Error de referencia: El remitente ('${sender_id}') o la sala ('${actualRoomIdForEmit}') no son válidos.`;
+                        }
+                        // No emitir aquí, dejar que el catch principal lo haga
+                        return reject(new Error(clientErrorMsg)); // Rechazar la promesa
+                    }
+                    console.log("Mensaje guardado en la BD con ID:", messageId);
+                    resolve(result);
+                });
             });
-        });
+
+            // --- Lógica común para emitir el mensaje ---
+            const userResults = await new Promise((resolve, reject) => {
+                connection.query('SELECT username FROM users WHERE id = ?', [sender_id], (errUser, results) => {
+                    if (errUser) return reject(new Error("Error fetching username"));
+                    resolve(results);
+                });
+            });
+
+            const username = (userResults.length === 0) ? 'Desconocido' : userResults[0].username;
+            const newMessageForRoom = {
+                id: messageId,
+                user: { id: sender_id, username: username },
+                message: message,
+                room: actualRoomIdForEmit, // Usar el ID de sala correcto
+                roomType: roomType,
+                created_at: createdAt,
+                time: createdAt.toLocaleTimeString()
+            };
+            io.to(room).emit("receiveMessage", newMessageForRoom);
+            console.log("se envió:",message, "a sala:", room);
+        } catch (error) {
+            // Este catch manejará errores de las promesas (Manejar..._Promise o las creadas para connection.query)
+            console.error("Error procesando sendMessage:", error.message);
+            // Asegúrate de no enviar múltiples respuestas de error al socket
+            if (socket && !socket.headersSent) { // headersSent no aplica a sockets, mejor un flag o verificar si ya se emitió error
+                socket.emit('messageError', { message: error.message || 'Ocurrió un error procesando el mensaje.' });
+            }
+        }
     });
 
     // Unirse a una sala (o múltiples salas)
@@ -214,14 +327,14 @@ io.on("connection", (socket) => {
             socket.emit("previousMessages", []);
             return;
         }
-        
+
         connection.query(queryMessages, queryParams, (err, results) => {
             if (err) {
                 console.error('Error al cargar mensajes desde la BD:', err);
                 socket.emit("previousMessages", []); // Enviar array vacío en caso de error
                 return;
             }
-            
+
             const formattedMessages = results.map(msg => ({
                 id: msg.id,
                 user: { id: msg.sender_id, username: msg.username },
@@ -232,6 +345,7 @@ io.on("connection", (socket) => {
                 time: new Date(msg.created_at).toLocaleTimeString()
             }));
             socket.emit("previousMessages", formattedMessages);
+            console.log("[server] intentando leer mensajes en sala:", room);
         });
     });
 

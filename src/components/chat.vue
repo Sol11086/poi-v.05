@@ -15,8 +15,8 @@ const user_id = parseJwt(token).id;
 console.log(user_id);
 
 const chats = ref([
-    { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private'},
-    { id: 2, name: 'María', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private'},
+    { id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private'},
+    { id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private'},
     { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png',type:'channel'}
 ]);
 
@@ -42,6 +42,7 @@ socket.on("leftRoom", () => {
 // Escuchar mensajes previos cuando se une a una sala
 socket.on("previousMessages", (history) => {
     messages.value = history;
+    console.log("mensajes recibidos", history);
 });
 
 const selectChat = (chat) => {
@@ -63,6 +64,7 @@ const sendMessage = () => {
         room: selectedChat.value.id,//id del chat 
         message: newMessage.value,
         sender_id: user_id || "Anónimo",
+        receiver_id: selectedChat.value.user_id || null,
         roomType: currentRoomType.value // 'private' o 'channel'
     });
     newMessage.value = '';
@@ -74,6 +76,11 @@ onMounted(() => {
     socket.emit("joinAllRooms", roomIds);
 
     socket.on("receiveMessage", (message) => {
+        console.log(message);
+        //senderID = message.user.id;
+        //senderuser= message.user.username;
+        //Fecha = message.created_at;
+        //Hora = message.time;
         if (selectedChat.value && selectedChat.value.id === message.room) {
             messages.value.push(message);
         } else {
@@ -115,9 +122,9 @@ onUnmounted(() => {
             </div>
             <!-- Mensajes -->
             <div class="message-container">
-                <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
+                <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user.username === username }"
                     class="message-item">
-                    <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
+                    <p class="message-text" :class="msg.user.username === username ? 'message-sent' : 'message-received'">
                         {{ msg.message }}
                     </p>
                 </div>
