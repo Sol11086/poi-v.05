@@ -92,7 +92,7 @@ onMounted(() => {
       </template>
     </Menubar>
 
-    <div class="flex overflow-y-hidden">
+    <div class="flex overflow-y-hidden h-full">
       <div class="sidebar">
         <Button icon="pi pi-bell" variant="text" size="large" @click="visibleNotis = true" rounded
           class="sidebar-button" />
