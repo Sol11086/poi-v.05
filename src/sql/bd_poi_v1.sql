@@ -19,6 +19,7 @@ CREATE TABLE teams (
     team_name VARCHAR(100) NOT NULL,
     owner_id VARCHAR(10) NOT NULL,
     image VARCHAR(255),
+    caption TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -132,7 +133,12 @@ CREATE TABLE rewards (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
--- SELECT * FROM users
+-- SELECT * FROM private_chats
+-- SELECT * FROM messages
 -- ALTER TABLE users CHANGE COLUMN password_hash password VARCHAR(255) NOT NULL;
--- INSERT INTO users (id, username, email, password, avatar, status)
+-- INSERT INTO users (id, username, email, password, avatar, status);
+-- 
+-- INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES ('8867566ed6ec51', 'VeckThor15', NULL, 3, 'ola grupo', '2025-05-20 06:11:03.211')
+
+-- CONSULTAS
 INSERT INTO users (id, username, email, password, avatar) VALUES ('VEK15', 'Veck MR', 'victormolru15@gmail.com', 'password123', 'default_avatar.png');

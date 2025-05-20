@@ -3,26 +3,27 @@ import { ref, onMounted, onUnmounted } from "vue";
 import Chat from "@/components/chat.vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
+import axios from 'axios';
 import { parseJwt } from '@/utils/jwt.js';
 import { InputText } from "primevue";
+
+
 import { content, header } from "@primeuix/themes/aura/accordion";
 
 onMounted(() => {
     equipos.value = [
-        { id: 1, nombre: "Equipo A", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
-        { id: 2, nombre: "Equipo B", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
-        { id: 3, nombre: "Equipo C", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
-        { id: 4, nombre: "Equipo D", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
-        { id: 5, nombre: "Equipo E", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
-        { id: 6, nombre: "Equipo F", description: "Materia programacion web sockwtmiij" , urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
+        { id: 1, nombre: "Equipo A", description: "Materia programacion web sockwtmiij", urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
+        { id: 2, nombre: "Equipo B", description: "Materia programacion web sockwtmiij", urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
+        { id: 3, nombre: "Equipo C", description: "Materia programacion web sockwtmiij", urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
+        { id: 4, nombre: "Equipo D", description: "Materia programacion web sockwtmiij", urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
+        { id: 5, nombre: "Equipo E", description: "Materia programacion web sockwtmiij", urlImagen: "https://i.pinimg.com/474x/d0/84/9e/d0849ef8583ee3d834542b5d02832bab.jpg" },
+        { id: 6, nombre: "Equipo F", description: "Materia programacion web sockwtmiij", urlImagen: "https://i.pinimg.com/474x/a6/4c/23/a64c2327f410f1f91abff4db7ef4e555.jpg" },
     ];
 });
 
 const countries = ref([
-    { name: 'Contacto 1', code: 'AU', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { name: 'Contacto 2', code: 'BR', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { name: 'Contacto 3', code: 'CN', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { name: 'Contacto 4', code: 'EG', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
+    { user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
 ]);
 
 
@@ -36,6 +37,8 @@ const visibleRight = ref(false);
 const microphoneOn = ref(false);
 const cameraOn = ref(false);
 const audioOn = ref(false);
+
+import { jwtDecode } from 'jwt-decode';
 
 // chat script
 
@@ -114,6 +117,98 @@ onUnmounted(() => {
     socket.off("receiveMessage");
 });
 
+// -----------Variables para los inputs del formulario-----------------
+let teamTitle = ref('');
+let teamDescription = ref('');
+let selectedMembers = ref([]); // Para el MultiSelect
+
+// Lista de usuarios/países para el MultiSelect (esto debería venir de tu backend o estado global)
+// Por ahora, un ejemplo. Necesitarás cargar tus usuarios reales aquí.
+const availableUsers = ref([
+    // Ejemplo de formato, asumiendo que tus usuarios tienen 'id' y 'username'
+    // Deberías obtener esta lista del servidor
+    // { id: 'user1_id_varchar10', username: 'Usuario Ejemplo 1', avatar: 'url_avatar_1' },
+    // { id: 'user2_id_varchar10', username: 'Usuario Ejemplo 2', avatar: 'url_avatar_2' },
+]);
+
+// Simulación de carga de usuarios disponibles. En una app real, esto vendría del servidor.
+onMounted(async () => {
+    // Aquí deberías emitir un evento al servidor para obtener la lista de todos los usuarios
+    // y popular availableUsers. Por ejemplo:
+    // socket.emit('fetchAllUsers', (users) => {
+    // availableUsers.value = users.map(user => ({ id: user.id, name: user.username, code: user.id, avatar: user.avatar || 'default_avatar_url' }));
+    // });
+    // Ejemplo estático por ahora:
+    availableUsers.value = [
+        { user_id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar_url: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
+        { user_id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar_url: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
+    ];
+});
+
+
+function getOwnerId() {
+    const token = localStorage.getItem('user_token');
+    if (token) {
+        try {
+            const decodedToken = jwtDecode(token);
+            return decodedToken.id; // Asumiendo que el token tiene un campo 'id' para el user ID
+        } catch (error) {
+            console.error("Error decodificando token:", error);
+            return null;
+        }
+    }
+    return null;
+};
+
+
+const handleCreateTeam = async () => { // Convertir a async
+    const ownerId = getOwnerId();
+    // ... validaciones ...
+
+    const teamData = {
+        team_name: teamTitle.value,
+        owner_id: ownerId,
+        // image: ...,
+        description: teamDescription.value,
+        members: selectedMembers.value.map(member => member.user_id)
+    };
+
+    try {
+        // Asegúrate que la URL base (ej: http://localhost:3000) sea correcta
+        const response = await axios.post('http://localhost:3000/api/teams', teamData, {
+            headers: {
+                // Si necesitas enviar el token JWT para autenticación en el endpoint HTTP
+                // 'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+
+        if (response.data.success) {
+            console.log('Equipo creado exitosamente:', response.data.team);
+            showCreateTeam.value = false;
+            teamTitle = ref('');
+            teamDescription = ref('');
+            selectedMembers = ref([]);
+            // Recargar equipos o actualizar UI
+        } else {
+            console.error('Error al crear el equipo:', response.data.error);
+            // Mostrar error al usuario
+        }
+    } catch (error) {
+        console.error('Error en la solicitud HTTP para crear equipo:', error.response ? error.response.data : error.message);
+        // Mostrar error al usuario
+    }
+
+};
+
+// Para abrir el diálogo (ejemplo, podrías tener un botón en tu template principal)
+// const openCreateTeamDialog = () => {
+// showCreateTeam.value = true;
+// };
+
+
+
+
+
 </script>
 
 <template>
@@ -128,7 +223,8 @@ onUnmounted(() => {
     </div>
 
     <div class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
-        <div v-for="equipo in equipos" :key="equipo.id" class="bg-[#04293C] rounded-lg shadow-md p-4 grid justify-center">
+        <div v-for="equipo in equipos" :key="equipo.id"
+            class="bg-[#04293C] rounded-lg shadow-md p-4 grid justify-center">
             <img :src="equipo.urlImagen" alt="Equipo" class="team-image rounded" />
             <p class="flex justify-center items-center mt-2 font-bold text-[#9F86F9]">{{ equipo.nombre }}</p>
             <p class="flex justify-center items-center mt-2 text-gray-200">{{ equipo.description }}</p>
@@ -162,22 +258,22 @@ onUnmounted(() => {
                     <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
                         <span class="text-gray-500"> Comenzar llamada </span>
                         <div class="relative w-fit h-fit">
-                            <Button icon="pi pi-phone"  @click="callId = equipo.id"
-                                class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" 
-                                />
-                            <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"  @click="callId = equipo.id"></i>
+                            <Button icon="pi pi-phone" @click="callId = equipo.id"
+                                class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
+                            <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
+                                @click="callId = equipo.id"></i>
                         </div>
                         <Button icon="pi pi-times" @click="activeCallTeamId = false"
                             class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
                     </div>
                 </template>
             </Dialog>
-            <Dialog :visible="callId === equipo.id"
-                @update:visible="newValue => { if (!newValue) callId = null; }" class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
-                content: {
-                    class: 'p-4 h-full overflow-y-auto'
-                }
-            }">
+            <Dialog :visible="callId === equipo.id" @update:visible="newValue => { if (!newValue) callId = null; }"
+                class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
+                    content: {
+                        class: 'p-4 h-full overflow-y-auto'
+                    }
+                }">
                 <template #header>
                     <div class="flex justify-between items-center">
                         <div class="p-4 flex justify-between items-center">
@@ -249,22 +345,25 @@ onUnmounted(() => {
         </div>
         <div class="p-y-5 grid w-full mt-5 gap-8">
             <FloatLabel class="w-full">
-                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
-                <label for="over_label">Titulo del equipo</label>
+                <InputText id="team_title" class="bg-[#081e29] p-1 text-white w-full" size="large"
+                    v-model="teamTitle" />
+                <label for="team_title">Titulo del equipo</label>
             </FloatLabel>
             <FloatLabel class="w-full">
-                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
-                <label for="over_label">Descripción</label>
+                <InputText id="team_description" class="bg-[#081e29] p-1 text-white w-full" size="large"
+                    v-model="teamDescription" />
+                <label for="team_description">Descripción (Opcional)</label>
             </FloatLabel>
             <FloatLabel class="w-full">
-                <MultiSelect v-model="selectedCountries" :options="countries" optionLabel="name" display="chip"
+                <MultiSelect v-model="selectedMembers" :options="availableUsers" optionLabel="name" display="chip"
                     class="bg-[#081e29] p-2 text-white w-full"
-                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]">
+                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]" placeholder="Selecciona integrantes"
+                    filter>
                     <template #option="slotProps">
                         <div class="flex items-center h-1/6 p-2 text-gray-300">
                             <img :alt="slotProps.option.name"
-                                src="https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg"
-                                :class="`flag flag-${slotProps.option.code.toLowerCase()} mr-2 h-5 `" />
+                                :src="slotProps.option.avatar_url || 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg'"
+                                :class="`flag flag-${slotProps.option.code ? slotProps.option.code.toLowerCase() : ''} mr-2 h-5 w-5 rounded-full object-cover`" />
                             <div>{{ slotProps.option.name }}</div>
                         </div>
                     </template>
@@ -272,13 +371,12 @@ onUnmounted(() => {
                         <i class="pi pi-users" />
                     </template>
                 </MultiSelect>
-                <label for="over_label">Integrantes seleccionados</label>
             </FloatLabel>
         </div>
         <div class="gap-4 flex justify-between mt-7">
-            <Button label="Crear nuevo equipo" size="small" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+            <Button label="Crear nuevo equipo" size="small" @click="handleCreateTeam" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2
                 rounded-full hover:bg-[#9F86F9] hover:text-white" />
-            <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2 
+            <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2
                 rounded-full hover:bg-[#C13030] hover:text-white" />
         </div>
     </Dialog>

@@ -79,6 +79,76 @@ app.post('/login', (req, res) => {
     });
 });
 
+app.post('/api/teams', async (req, res) => { // O router.post('/', ...
+    const { team_name, owner_id, image, members, description } = req.body;
+    console.log(req.body);
+
+    if (!team_name || !owner_id) {
+        return res.status(400).json({ success: false, error: "El nombre del equipo y el ID del propietario son obligatorios." });
+    }
+
+    try {
+        // Aquí llamarías a tu lógica de creación de equipo que interactúa con la BD.
+        // Esta lógica podría estar en una función en este mismo archivo o en un servicio importado.
+        // Por simplicidad, la lógica de BD iría aquí o en una función llamada desde aquí.
+
+        const newTeamId = generateTeamID(); 
+        const teamImagePath = image || 'default_team_avatar.png';
+
+        // Ejemplo simplificado (deberías usar transacciones como en el ejemplo anterior de socket):
+        await new Promise((resolve, reject) => {
+            connection.beginTransaction(transactionErr => {
+                if (transactionErr) return reject(transactionErr);
+
+                const teamQuery = 'INSERT INTO teams (id, team_name, owner_id, image, caption, created_at) VALUES (?, ?, ?, ?, ?, NOW())';
+                connection.query(teamQuery, [newTeamId, team_name, owner_id, teamImagePath, description], (teamInsertErr) => {
+                    if (teamInsertErr) return connection.rollback(() => reject(teamInsertErr));
+
+                    const memberInserts = [];
+                    memberInserts.push(new Promise((resMember, rejMember) => { // Propietario
+                        connection.query('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [newTeamId, owner_id, 'admin'], (err) => {
+                            if (err) return rejMember(err);
+                            resMember();
+                        });
+                    }));
+
+                    if (members && members.length > 0) {
+                        members.forEach(userId => {
+                            if (userId !== owner_id) {
+                                memberInserts.push(new Promise((resMember, rejMember) => {
+                                    connection.query('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [newTeamId, userId, 'member'], (err) => {
+                                        if (err) return rejMember(err);
+                                        resMember();
+                                    });
+                                }));
+                            }
+                        });
+                    }
+
+                    Promise.all(memberInserts)
+                        .then(() => {
+                            connection.commit(commitErr => {
+                                if (commitErr) return connection.rollback(() => reject(commitErr));
+                                resolve({ id: newTeamId, team_name, owner_id, image: teamImagePath, members: [owner_id, ...(members || [])] });
+                            });
+                        })
+                        .catch(memberErr => connection.rollback(() => reject(memberErr)));
+                });
+            });
+        })
+        .then(createdTeam => {
+             res.status(201).json({ success: true, team: createdTeam });
+        })
+        .catch(error => {
+            console.error("Error al crear el equipo vía API:", error);
+            res.status(500).json({ success: false, error: "Error interno del servidor al crear el equipo." });
+        });
+
+    } catch (error) {
+        console.error("Error en POST /api/teams:", error);
+        res.status(500).json({ success: false, error: "Error del servidor." });
+    }
+});
 
 // connection.end(); // Cerrar la conexión a la base de datos al finalizar
 //----------- FIN DE LA CONFIGURACION DE LA BASE DE DATOS ----------
