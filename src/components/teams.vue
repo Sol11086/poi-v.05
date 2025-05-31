@@ -3,8 +3,11 @@ import { ref, onMounted, onUnmounted, computed } from "vue";
 import Chat from "@/components/chat.vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
+import axios from 'axios';
 import { parseJwt } from '@/utils/jwt.js';
 import { InputText } from "primevue";
+
+
 import { content, header } from "@primeuix/themes/aura/accordion";
 import GeneralTeams from "./GeneralTeams.vue";
 
@@ -21,10 +24,8 @@ onMounted(() => {
 });
 
 const countries = ref([
-    { name: 'Contacto 1', code: 'AU', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { name: 'Contacto 2', code: 'BR', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { name: 'Contacto 3', code: 'CN', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { name: 'Contacto 4', code: 'EG', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
+    { user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
 ]);
 
 const selectedTeam = computed(() => {
@@ -41,6 +42,8 @@ const visibleRight = ref(false);
 const microphoneOn = ref(false);
 const cameraOn = ref(false);
 const audioOn = ref(false);
+
+import { jwtDecode } from 'jwt-decode';
 
 // chat script
 
@@ -119,6 +122,303 @@ onUnmounted(() => {
     socket.off("receiveMessage");
 });
 
+// -----------Variables para los inputs del formulario-----------------
+let teamTitle = ref('');
+let teamDescription = ref('');
+let selectedMembers = ref([]); // Para el MultiSelect
+
+// Lista de usuarios/países para el MultiSelect (esto debería venir de tu backend o estado global)
+// Por ahora, un ejemplo. Necesitarás cargar tus usuarios reales aquí.
+const availableUsers = ref([
+    // Ejemplo de formato, asumiendo que tus usuarios tienen 'id' y 'username'
+    // Deberías obtener esta lista del servidor
+    { user_id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar_url: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
+    { user_id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar_url: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
+]);
+
+
+
+function getOwnerId() {
+    const token = localStorage.getItem('user_token');
+    if (token) {
+        try {
+            const decodedToken = jwtDecode(token);
+            return decodedToken.id; // Asumiendo que el token tiene un campo 'id' para el user ID
+        } catch (error) {
+            console.error("Error decodificando token:", error);
+            return null;
+        }
+    }
+    return null;
+};
+
+
+const handleCreateTeam = async () => { // Convertir a async
+    const ownerId = getOwnerId();
+    // ... validaciones ...
+
+    const teamData = {
+        team_name: teamTitle.value,
+        owner_id: ownerId,
+        // image: ...,
+        description: teamDescription.value,
+        members: selectedMembers.value.map(member => member.user_id)
+    };
+
+    try {
+        // Asegúrate que la URL base (ej: http://localhost:3000) sea correcta
+        const response = await axios.post('http://localhost:3000/api/teams', teamData, {
+            headers: {
+                // Si necesitas enviar el token JWT para autenticación en el endpoint HTTP
+                // 'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+
+        if (response.data.success) {
+            console.log('Equipo creado exitosamente:', response.data.team);
+            showCreateTeam.value = false;
+            teamTitle = ref('');
+            teamDescription = ref('');
+            selectedMembers = ref([]);
+            // Recargar equipos o actualizar UI
+        } else {
+            console.error('Error al crear el equipo:', response.data.error);
+            // Mostrar error al usuario
+        }
+    } catch (error) {
+        console.error('Error en la solicitud HTTP para crear equipo:', error.response ? error.response.data : error.message);
+        // Mostrar error al usuario
+    }
+
+};
+
+// Para abrir el diálogo (ejemplo, podrías tener un botón en tu template principal)
+// const openCreateTeamDialog = () => {
+// showCreateTeam.value = true;
+// };
+
+const loading = ref(true);
+const error = ref(null);
+
+// Function to construct the full image URL if your 'equipo.image' stores relative paths
+// or just returns the path if it's already a full URL or placeholder identifier.
+const getImageUrl = (imagePath) => {
+    if (!imagePath) {
+        // Return a default placeholder if no image path is provided
+        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
+    }
+
+    if (imagePath === 'default_team_avatar.png') {
+        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
+    }
+    // Fallback for other cases, assuming imagePath might be a full URL or needs specific handling
+    let FinalPath = "/src/assets/" + imagePath;
+    return FinalPath;
+};
+
+
+onMounted(async () => {
+    try {
+        loading.value = true;
+        error.value = null;
+        const token = localStorage.getItem('user_token'); // Or however you store your token
+
+        if (!token) {
+            error.value = 'Authentication token not found. Please log in.';
+            // Optionally, redirect to login: router.push('/login');
+            loading.value = false;
+            return;
+        }
+
+        const response = await axios.get('http://localhost:3000/api/my-teams', { // Ensure the URL is correct
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        console.log(response);
+        if (response.data.success) {
+            equipos.value = response.data.teams.map(team => ({
+                id: team.id,
+                team_name: team.team_name,
+                image: team.image || 'default_team_avatar.png', // Use default if image is null/empty
+                caption: team.caption,
+                owner_id: team.owner_id
+                // map other necessary fields
+            }));
+        } else {
+            error.value = response.data.error || 'Failed to load teams.';
+        }
+    } catch (err) {
+        console.error('Error fetching teams:', err);
+        if (err.response) {
+            // Server responded with a status code that falls out of the range of 2xx
+            error.value = `Server error: ${err.response.status} - ${err.response.data.error || err.message}`;
+            if (err.response.status === 401 || err.response.status === 403) {
+                // Token might be invalid or expired, redirect to login
+                // router.push('/login');
+                error.value = 'Session expired or invalid. Please log in again.';
+            }
+        } else if (err.request) {
+            // The request was made but no response was received
+            error.value = 'No response from server. Please check your network connection.';
+        } else {
+            // Something happened in setting up the request that triggered an Error
+            error.value = `Error: ${err.message}`;
+        }
+    } finally {
+        loading.value = false;
+    }
+});
+
+
+
+// -----------Variables para los inputs del formulario-----------------
+let teamTitle = ref('');
+let teamDescription = ref('');
+let selectedMembers = ref([]); // Para el MultiSelect
+
+// Lista de usuarios/países para el MultiSelect (esto debería venir de tu backend o estado global)
+// Por ahora, un ejemplo. Necesitarás cargar tus usuarios reales aquí.
+const availableUsers = ref([
+    // Ejemplo de formato, asumiendo que tus usuarios tienen 'id' y 'username'
+    // Deberías obtener esta lista del servidor
+    { user_id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar_url: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
+    { user_id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar_url: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
+]);
+
+
+
+function getOwnerId() {
+    const token = localStorage.getItem('user_token');
+    if (token) {
+        try {
+            const decodedToken = jwtDecode(token);
+            return decodedToken.id; // Asumiendo que el token tiene un campo 'id' para el user ID
+        } catch (error) {
+            console.error("Error decodificando token:", error);
+            return null;
+        }
+    }
+    return null;
+};
+
+
+const handleCreateTeam = async () => { // Convertir a async
+    const ownerId = getOwnerId();
+    // ... validaciones ...
+
+    const teamData = {
+        team_name: teamTitle.value,
+        owner_id: ownerId,
+        // image: ...,
+        description: teamDescription.value,
+        members: selectedMembers.value.map(member => member.user_id)
+    };
+
+    try {
+        // Asegúrate que la URL base (ej: http://localhost:3000) sea correcta
+        const response = await axios.post('http://localhost:3000/api/teams', teamData, {
+            headers: {
+                // Si necesitas enviar el token JWT para autenticación en el endpoint HTTP
+                // 'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+
+        if (response.data.success) {
+            console.log('Equipo creado exitosamente:', response.data.team);
+            showCreateTeam.value = false;
+            teamTitle = ref('');
+            teamDescription = ref('');
+            selectedMembers = ref([]);
+            // Recargar equipos o actualizar UI
+        } else {
+            console.error('Error al crear el equipo:', response.data.error);
+            // Mostrar error al usuario
+        }
+    } catch (error) {
+        console.error('Error en la solicitud HTTP para crear equipo:', error.response ? error.response.data : error.message);
+        // Mostrar error al usuario
+    }
+
+};
+
+// Para abrir el diálogo (ejemplo, podrías tener un botón en tu template principal)
+// const openCreateTeamDialog = () => {
+// showCreateTeam.value = true;
+// };
+
+const loading = ref(true);
+const error = ref(null);
+
+// Function to construct the full image URL if your 'equipo.image' stores relative paths
+// or just returns the path if it's already a full URL or placeholder identifier.
+const getImageUrl = (imagePath) => {
+    if (!imagePath) {
+        // Return a default placeholder if no image path is provided
+        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
+    }
+
+    if (imagePath === 'default_team_avatar.png') {
+        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
+    }
+    // Fallback for other cases, assuming imagePath might be a full URL or needs specific handling
+    let FinalPath = "/src/assets/" + imagePath;
+    return FinalPath;
+};
+
+
+onMounted(async () => {
+    try {
+        loading.value = true;
+        error.value = null;
+        const token = localStorage.getItem('user_token'); // Or however you store your token
+
+        if (!token) {
+            error.value = 'Authentication token not found. Please log in.';
+            // Optionally, redirect to login: router.push('/login');
+            loading.value = false;
+            return;
+        }
+
+        const response = await axios.get('http://localhost:3000/api/my-teams', { // Ensure the URL is correct
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        console.log(response);
+        if (response.data.success) {
+            equipos.value = response.data.teams.map(team => ({
+                id: team.id,
+                team_name: team.team_name,
+                image: team.image || 'default_team_avatar.png', // Use default if image is null/empty
+                caption: team.caption,
+                owner_id: team.owner_id
+                // map other necessary fields
+            }));
+        } else {
+            error.value = response.data.error || 'Failed to load teams.';
+        }
+    } catch (err) {
+        console.error('Error fetching teams:', err);
+        if (err.response) {
+            // Server responded with a status code that falls out of the range of 2xx
+            error.value = `Server error: ${err.response.status} - ${err.response.data.error || err.message}`;
+            if (err.response.status === 401 || err.response.status === 403) {
+                // Token might be invalid or expired, redirect to login
+                // router.push('/login');
+                error.value = 'Session expired or invalid. Please log in again.';
+            }
+        } else if (err.request) {
+            // The request was made but no response was received
+            error.value = 'No response from server. Please check your network connection.';
+        } else {
+            // Something happened in setting up the request that triggered an Error
+            error.value = `Error: ${err.message}`;
+        }
+    } finally {
+        loading.value = false;
+    }
+});
 
 const showGeneral = ref(false)
 const emit = defineEmits(['backToHome']) // o el nombre que uses en Home
@@ -140,24 +440,30 @@ function handleBack() {
         rounded-full hover:bg-[#9F86F9] hover:text-white" />
     </div>
     <div class="h-full">
-        <div v-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
+        <div v-if="loading">Loading teams...</div>
+        <div v-else-if="error">Error loading teams: {{ error }}</div>
+        <div v-else-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
             <div v-for="equipo in equipos" :key="equipo.id"
-                class="bg-[#04293C] rounded-lg shadow-md p-4 grid justify-center">
-                <div class="hover:bg-[#ffffff] hover:opacity-55 flex justify-center items-center"
-                    @click="generalId = equipo.id"> <img :src="equipo.urlImagen" alt="Equipo"
-                        class="team-image rounded" />
+                class="bg-[#04293C] rounded-lg shadow-md hover:bg-[#163a4e] p-4 grid justify-center"
+                @click="generalId = equipo.id">
+                <div class="w-[500px] h-[500px] overflow-hidden relative rounded">
+                    <img :src="getImageUrl(equipo.image)" :alt="equipo.team_name"
+                        class="absolute w-full h-full object-cover" />
                 </div>
-                <Button variant="link"
-                    class="flex justify-center items-center mt-2 font-bold text-[#9F86F9] hover:text-[#463583]">{{
-                        equipo.nombre }}</Button>
-                <p class="flex justify-center items-center mt-2 text-gray-200 text-center" >{{ equipo.description }}</p>
-                <div class="justify-center flex gap-4 mt-2">
+                <p variant="link" class="flex justify-center items-center mt-2 font-bold text-[#9F86F9]">
+                    {{ equipo.team_name }}</p>
+                <p class="flex justify-center items-center mt-2 text-gray-200 text-center">{{ equipo.caption }}</p>
+
+                <div v-if="equipos.length === 0">
+                    You are not part of any teams yet.
+                </div>
+                <div class="justify-center flex display relative gap-4 mt-2">
                     <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                        class="text-[#129E82] p-1" @click="activeCallTeamId = equipo.id"
+                        class="text-[#129E82] p-1" @click.stop="activeCallTeamId = equipo.id"
                         v-tooltip.bottom="'Iniciar llamada'" />
                 </div>
 
-
+                
                 <Dialog :visible="activeCallTeamId === equipo.id"
                     @update:visible="newValue => { if (!newValue) activeCallTeamId = null; }" modal class="w-1/4 h-fit"
                     :style="{ backgroundColor: transparent }" pt:root:class="!border-0 !bg-transparent">
@@ -243,14 +549,12 @@ function handleBack() {
                 </Dialog>
             </div>
         </div>
-        <div v-else class="h-full" >
+        <div v-else class="h-full">
             <div v-if="selectedTeam" class="h-full">
                 <GeneralTeams :equipos="id" @backToTeamsList="handleBack"></GeneralTeams>
             </div>
         </div>
     </div>
-
-
 
     <Dialog v-model:visible="showCreateTeam" modal class="w-1/3 h-fit p-2" :style="{ backgroundColor: '#04293C' }">
         <template #header>
@@ -264,22 +568,25 @@ function handleBack() {
         </div>
         <div class="p-y-5 grid w-full mt-5 gap-8">
             <FloatLabel class="w-full">
-                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
-                <label for="over_label">Titulo del equipo</label>
+                <InputText id="team_title" class="bg-[#081e29] p-1 text-white w-full" size="large"
+                    v-model="teamTitle" />
+                <label for="team_title">Titulo del equipo</label>
             </FloatLabel>
             <FloatLabel class="w-full">
-                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
-                <label for="over_label">Descripción</label>
+                <InputText id="team_description" class="bg-[#081e29] p-1 text-white w-full" size="large"
+                    v-model="teamDescription" />
+                <label for="team_description">Descripción (Opcional)</label>
             </FloatLabel>
             <FloatLabel class="w-full">
-                <MultiSelect v-model="selectedCountries" :options="countries" optionLabel="name" display="chip"
+                <MultiSelect v-model="selectedMembers" :options="availableUsers" optionLabel="name" display="chip"
                     class="bg-[#081e29] p-2 text-white w-full"
-                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]">
+                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]" placeholder="Selecciona integrantes"
+                    filter>
                     <template #option="slotProps">
                         <div class="flex items-center h-1/6 p-2 text-gray-300">
                             <img :alt="slotProps.option.name"
-                                src="https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg"
-                                :class="`flag flag-${slotProps.option.code.toLowerCase()} mr-2 h-5 `" />
+                                :src="slotProps.option.avatar_url || 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg'"
+                                :class="`flag flag-${slotProps.option.code ? slotProps.option.code.toLowerCase() : ''} mr-2 h-5 w-5 rounded-full object-cover`" />
                             <div>{{ slotProps.option.name }}</div>
                         </div>
                     </template>
@@ -287,16 +594,16 @@ function handleBack() {
                         <i class="pi pi-users" />
                     </template>
                 </MultiSelect>
-                <label for="over_label">Integrantes seleccionados</label>
             </FloatLabel>
         </div>
         <div class="gap-4 flex justify-between mt-7">
-            <Button label="Crear nuevo equipo" size="small" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+            <Button label="Crear nuevo equipo" size="small" @click="handleCreateTeam" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2
                 rounded-full hover:bg-[#9F86F9] hover:text-white" />
-            <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2 
+            <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2
                 rounded-full hover:bg-[#C13030] hover:text-white" />
         </div>
     </Dialog>
+
 </template>
 
 <style>
