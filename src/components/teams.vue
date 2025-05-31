@@ -270,162 +270,12 @@ onMounted(async () => {
     }
 });
 
-
-
-// -----------Variables para los inputs del formulario-----------------
-let teamTitle = ref('');
-let teamDescription = ref('');
-let selectedMembers = ref([]); // Para el MultiSelect
-
-// Lista de usuarios/países para el MultiSelect (esto debería venir de tu backend o estado global)
-// Por ahora, un ejemplo. Necesitarás cargar tus usuarios reales aquí.
-const availableUsers = ref([
-    // Ejemplo de formato, asumiendo que tus usuarios tienen 'id' y 'username'
-    // Deberías obtener esta lista del servidor
-    { user_id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar_url: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
-    { user_id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar_url: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
-]);
-
-
-
-function getOwnerId() {
-    const token = localStorage.getItem('user_token');
-    if (token) {
-        try {
-            const decodedToken = jwtDecode(token);
-            return decodedToken.id; // Asumiendo que el token tiene un campo 'id' para el user ID
-        } catch (error) {
-            console.error("Error decodificando token:", error);
-            return null;
-        }
-    }
-    return null;
-};
-
-
-const handleCreateTeam = async () => { // Convertir a async
-    const ownerId = getOwnerId();
-    // ... validaciones ...
-
-    const teamData = {
-        team_name: teamTitle.value,
-        owner_id: ownerId,
-        // image: ...,
-        description: teamDescription.value,
-        members: selectedMembers.value.map(member => member.user_id)
-    };
-
-    try {
-        // Asegúrate que la URL base (ej: http://localhost:3000) sea correcta
-        const response = await axios.post('http://localhost:3000/api/teams', teamData, {
-            headers: {
-                // Si necesitas enviar el token JWT para autenticación en el endpoint HTTP
-                // 'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        });
-
-        if (response.data.success) {
-            console.log('Equipo creado exitosamente:', response.data.team);
-            showCreateTeam.value = false;
-            teamTitle = ref('');
-            teamDescription = ref('');
-            selectedMembers = ref([]);
-            // Recargar equipos o actualizar UI
-        } else {
-            console.error('Error al crear el equipo:', response.data.error);
-            // Mostrar error al usuario
-        }
-    } catch (error) {
-        console.error('Error en la solicitud HTTP para crear equipo:', error.response ? error.response.data : error.message);
-        // Mostrar error al usuario
-    }
-
-};
-
-// Para abrir el diálogo (ejemplo, podrías tener un botón en tu template principal)
-// const openCreateTeamDialog = () => {
-// showCreateTeam.value = true;
-// };
-
-const loading = ref(true);
-const error = ref(null);
-
-// Function to construct the full image URL if your 'equipo.image' stores relative paths
-// or just returns the path if it's already a full URL or placeholder identifier.
-const getImageUrl = (imagePath) => {
-    if (!imagePath) {
-        // Return a default placeholder if no image path is provided
-        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
-    }
-
-    if (imagePath === 'default_team_avatar.png') {
-        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
-    }
-    // Fallback for other cases, assuming imagePath might be a full URL or needs specific handling
-    let FinalPath = "/src/assets/" + imagePath;
-    return FinalPath;
-};
-
-
-onMounted(async () => {
-    try {
-        loading.value = true;
-        error.value = null;
-        const token = localStorage.getItem('user_token'); // Or however you store your token
-
-        if (!token) {
-            error.value = 'Authentication token not found. Please log in.';
-            // Optionally, redirect to login: router.push('/login');
-            loading.value = false;
-            return;
-        }
-
-        const response = await axios.get('http://localhost:3000/api/my-teams', { // Ensure the URL is correct
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        console.log(response);
-        if (response.data.success) {
-            equipos.value = response.data.teams.map(team => ({
-                id: team.id,
-                team_name: team.team_name,
-                image: team.image || 'default_team_avatar.png', // Use default if image is null/empty
-                caption: team.caption,
-                owner_id: team.owner_id
-                // map other necessary fields
-            }));
-        } else {
-            error.value = response.data.error || 'Failed to load teams.';
-        }
-    } catch (err) {
-        console.error('Error fetching teams:', err);
-        if (err.response) {
-            // Server responded with a status code that falls out of the range of 2xx
-            error.value = `Server error: ${err.response.status} - ${err.response.data.error || err.message}`;
-            if (err.response.status === 401 || err.response.status === 403) {
-                // Token might be invalid or expired, redirect to login
-                // router.push('/login');
-                error.value = 'Session expired or invalid. Please log in again.';
-            }
-        } else if (err.request) {
-            // The request was made but no response was received
-            error.value = 'No response from server. Please check your network connection.';
-        } else {
-            // Something happened in setting up the request that triggered an Error
-            error.value = `Error: ${err.message}`;
-        }
-    } finally {
-        loading.value = false;
-    }
-});
-
 const showGeneral = ref(false)
 const emit = defineEmits(['backToHome']) // o el nombre que uses en Home
 
 function handleBack() {
-  showGeneral.value = false
-  emit('backToHome') // Opcional si quieres que Home sepa
+    showGeneral.value = false
+    emit('backToHome') // Opcional si quieres que Home sepa
 }
 </script>
 
@@ -463,7 +313,7 @@ function handleBack() {
                         v-tooltip.bottom="'Iniciar llamada'" />
                 </div>
 
-                
+
                 <Dialog :visible="activeCallTeamId === equipo.id"
                     @update:visible="newValue => { if (!newValue) activeCallTeamId = null; }" modal class="w-1/4 h-fit"
                     :style="{ backgroundColor: transparent }" pt:root:class="!border-0 !bg-transparent">
