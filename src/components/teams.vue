@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import Chat from "@/components/chat.vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
@@ -9,6 +9,8 @@ import { InputText } from "primevue";
 import { content, header } from "@primeuix/themes/aura/accordion";
 import GeneralTeams from "./GeneralTeams.vue";
 
+const remotePeerId = ref('');
+const currentCall = ref(null);
 
 onMounted(() => {
     equipos.value = [
@@ -40,48 +42,6 @@ const visibleRight = ref(false);
 const microphoneOn = ref(false);
 const cameraOn = ref(false);
 const audioOn = ref(false);
-
-const API_BASE_URL = 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app';
-
-const fetchEquipos = async () => {
-    const token = localStorage.getItem('user_token');
-    if (!token) {
-        // Manejar no autenticado
-        return;
-    }
-    // const currentUser = parseJwt(token); // No es necesario aquí si el backend ya filtra por usuario
-
-    try {
-        const response = await axios.get(`${API_BASE_URL}/api/my-teams`, { //
-            headers: {
-                 Authorization: `Bearer ${token}`,
-                 'ngrok-skip-browser-warning': 'true'
-                }
-        });
-        if (response.data.success) {
-            equipos.value = response.data.teams;
-        }
-    } catch (error) {
-        console.error("Error al cargar equipos:", error);
-    }
-};
-
-
-const selectTeam = (teamId) => {
-    if (generalId.value === teamId) {
-        // Opcional: Deseleccionar si se hace clic de nuevo en el mismo equipo
-        // selectedTeamId.value = null;
-    } else {
-        generalId.value = teamId;
-    }
-    console.log("Equipo seleccionado ID:", generalId.value);
-};
-
-onMounted(() => {
-    fetchEquipos();
-});
-
-import { jwtDecode } from 'jwt-decode';
 
 // chat script
 
@@ -347,7 +307,11 @@ function handleBack() {
                 <div v-if="equipos.length === 0">
                     You are not part of any teams yet.
                 </div>
-                <div class="justify-center flex display relative gap-4 mt-2">
+                <Button variant="link"
+                    class="flex justify-center items-center mt-2 font-bold text-[#9F86F9] hover:text-[#463583]">{{
+                        equipo.nombre }}</Button>
+                <p class="flex justify-center items-center mt-2 text-gray-200 text-center" >{{ equipo.description }}</p>
+                <div class="justify-center flex gap-4 mt-2">
                     <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
                         class="text-[#129E82] p-1" @click.stop="activeCallTeamId = equipo.id"
                         v-tooltip.bottom="'Iniciar llamada'" />
@@ -361,10 +325,10 @@ function handleBack() {
                         <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
                             <span class="text-gray-500"> Comenzar llamada </span>
                             <div class="relative w-fit h-fit">
-                                <Button icon="pi pi-phone" @click="callId = equipo.id"
+                                <Button icon="pi pi-phone" @click="handleCallClick"
                                     class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
                                 <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
-                                    @click="callId = equipo.id"></i>
+                                    @click="handleCallClick"></i>
                             </div>
                             <Button icon="pi pi-times" @click="activeCallTeamId = false"
                                 class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
@@ -397,8 +361,13 @@ function handleBack() {
                                     :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
                             </div>
                             <div>
-                                <Button severity="secondary" @click="callId = false" label="Colgar llamada"
-                                    class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm font-light hover:bg-[#8a2222] hover:text-white" />
+                                <Button severity="secondary" @click="endCall" label="Colgar llamada" class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm 
+                                    font-light hover:bg-[#8a2222] hover:text-white" />
+                            </div>
+                            <div>
+                                <span class="text-white font-bold">Sala: {{ roomId }}</span>
+                                <Button label="Copiar ID" @click="copyToClipboard(roomId)" icon="pi pi-copy"
+                                    class="text-xs text-[#9F86F9]" />
                             </div>
                         </div>
                     </template>
@@ -428,13 +397,15 @@ function handleBack() {
                                 </div>
                             </div>
                         </div>
-                        <div v-if="cameraOn" class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
+                        <video ref="localVideoRef" autoplay muted v-if="cameraOn"
+                            class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
                             Tu camara
-                        </div>
-                        <div class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
+                        </video>
+                        <video ref="remoteVideoRef" autoplay
+                            class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
                             <span class="text-xl"> En espera </span>
                             <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
-                        </div>
+                        </video>
                     </div>
                 </Dialog>
             </div>

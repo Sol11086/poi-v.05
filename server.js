@@ -126,9 +126,17 @@ app.post('/login', (req, res) => {
             return;
         }
         const user = result[0];
-        if (user.password === password) { // Considerar bcrypt
-            const token = jwt.sign({ id: user.id, username: user.username }, 'tu_clave_secreta', { expiresIn: '24h' });
-            if (!res.headersSent) res.status(200).send({ success: true, token, user: { id: user.id, username: user.username, email: user.email, avatar: user.avatar, reward_points: user.reward_points } });
+        
+        // Verificar contraseña
+        if (user.password === password) {
+            // Generar un token JWT
+            const token = jwt.sign({ id: user.id, username: user.username }, 'tu_clave_secreta', { expiresIn: '1h' });
+
+            // Imprimir el token en consola para verificar su contenido
+            console.log("Token generado:", token); // Esto te permitirá ver el token completo
+
+            // Enviar el token al frontend
+            return res.status(200).send({ success: true, token });
         } else {
             if (!res.headersSent) res.status(401).send({ success: false, message: 'Contraseña incorrecta' });
         }
@@ -742,6 +750,50 @@ app.use((err, req, res, next) => {
         error: err.message || 'Error interno del servidor.'
     });
 });
+
+//////VIDEO_LLAMADA////////
+
+//PLEEASE SO FOR ONCE IN MY LIFE
+////Let me get WHAT I WANT 
+///LORD KNOWA. IT WOULD BE THE FIRST TIME
+
+socket.on("webrtc-offer", ({ to, offer }) => {
+    socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
+});
+
+socket.on("webrtc-answer", ({ to, answer }) => {
+    socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
+});
+
+socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+    socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
+});
+
+// Opcional: notificar que un usuario está listo para llamar
+socket.on("ready-for-call", ({ room }) => {
+    socket.to(room).emit("user-ready", { id: socket.id });
+});
+
+
+/////FIN VIDEOLLAMADA///////
+
+socket.on("webrtc-offer", ({ to, offer }) => {
+    socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
+});
+
+socket.on("webrtc-answer", ({ to, answer }) => {
+    socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
+});
+
+socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+    socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
+});
+
+// Opcional: notificar que un usuario está listo para llamar
+socket.on("ready-for-call", ({ room }) => {
+    socket.to(room).emit("user-ready", { id: socket.id });
+});
+
 
 server.listen(3000, () => {
     console.log("Servidor corriendo en http://localhost:3000");
