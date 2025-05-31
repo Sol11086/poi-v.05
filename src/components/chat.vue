@@ -79,6 +79,12 @@ onUnmounted(() => {
     socket.off("receiveMessage");
 });
 
+const emit = defineEmits(['view-profile'])
+
+function goToProfile() {
+  emit('view-profile', selectedChat)
+}
+
 </script>
 
 <template>
@@ -98,7 +104,7 @@ onUnmounted(() => {
         <div class="chat-area">
             <!-- Header del chat -->
             <div v-if="selectedChat" class="chat-header">
-                <img :src="selectedChat.avatar" class="chat-header-avatar" />
+                <img :src="selectedChat.avatar" class="chat-header-avatar"  @click="goToProfile" />
                 <div>
                     <h2 class="chat-header-title">{{ selectedChat.name }}</h2>
                     <p class="chat-header-status">En línea</p>

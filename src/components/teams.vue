@@ -119,6 +119,14 @@ onUnmounted(() => {
     socket.off("receiveMessage");
 });
 
+
+const showGeneral = ref(false)
+const emit = defineEmits(['backToHome']) // o el nombre que uses en Home
+
+function handleBack() {
+  showGeneral.value = false
+  emit('backToHome') // Opcional si quieres que Home sepa
+}
 </script>
 
 <template>
@@ -147,27 +155,8 @@ onUnmounted(() => {
                     <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
                         class="text-[#129E82] p-1" @click="activeCallTeamId = equipo.id"
                         v-tooltip.bottom="'Iniciar llamada'" />
-                    <Button icon="pi pi-inbox" @click="activeChatTeamId = equipo.id" class="text-[#129E82]"
-                        v-tooltip.bottom="'Abrir chat'" />
                 </div>
 
-                <Dialog :visible="activeChatTeamId === equipo.id"
-                    @update:visible="newValue => { if (!newValue) activeChatTeamId = null; }" maximizable
-                    class="dialogChat"
-                    :style="{ width: '50rem', height: '30rem', backgroundColor: '#04293C', padding: '1rem', border: 'none' }"
-                    :pt="{
-                        content: {
-                            class: 'h-[500px] overflow-y-auto'
-                        }
-                    }">
-                    <template #header>
-                        <span class="p-2 text-white text-xl">
-                            <i class="pi pi-comments"></i>
-                            Chat
-                        </span>
-                    </template>
-                    <Chat></Chat>
-                </Dialog>
 
                 <Dialog :visible="activeCallTeamId === equipo.id"
                     @update:visible="newValue => { if (!newValue) activeCallTeamId = null; }" modal class="w-1/4 h-fit"
@@ -243,6 +232,9 @@ onUnmounted(() => {
                                 </div>
                             </div>
                         </div>
+                        <div v-if="cameraOn" class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
+                            Tu camara
+                        </div>
                         <div class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
                             <span class="text-xl"> En espera </span>
                             <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
@@ -253,7 +245,7 @@ onUnmounted(() => {
         </div>
         <div v-else class="h-full" >
             <div v-if="selectedTeam" class="h-full">
-                <GeneralTeams :equipos="id"></GeneralTeams>
+                <GeneralTeams :equipos="id" @backToTeamsList="handleBack"></GeneralTeams>
             </div>
         </div>
     </div>

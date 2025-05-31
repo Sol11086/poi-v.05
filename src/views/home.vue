@@ -6,6 +6,7 @@ import Chat from "@/components/chat.vue";
 import Homeworks from "@/components/homeworks.vue";
 import Teams from "@/components/teams.vue";
 import { parseJwt } from '@/utils/jwt.js';
+import UseProfile from "../components/useProfile.vue";
 
 const visibleNotis = ref(false);
 const visibleChat = ref(false);
@@ -32,11 +33,13 @@ const sendMessage = () => {
   newMessage.value = '';
 };
 
-const activeComponent = ref('home');
+const activeComponent = ref('teams');
 
-const setActiveComponent = (component) => {
-  activeComponent.value = activeComponent.value === component ? null : component;
-};
+function setActiveComponent(component) {
+  if (activeComponent.value !== component) {
+    activeComponent.value = component
+  }
+}
 
 const op = ref();
 const toggle = (event) => {
@@ -63,6 +66,19 @@ onMounted(() => {
 //   localStorage.removeItem('username');
 //   this.$router.push('/login'); // Redirige al login
 // }
+
+const selectedUserProfile = ref(null)
+
+function openUserProfile(user) {
+  selectedUserProfile.value = user
+  visibleChat.value = false
+  activeComponent.value = 'profile'
+}
+
+const teamsKey = ref(0)
+function resetView() {
+  teamsKey.value++
+}
 
 </script>
 
@@ -104,10 +120,11 @@ onMounted(() => {
           class="sidebar-button" />
       </div>
 
-      <div class="flex-1 bg-[#010F16] text-white max-h-[calc(100vh-Xpx)] overflow-y-auto scr ml-16"
+      <div class="flex-1 bg-[#010F16] text-white max-h-[calc(100vh-Xpx)] overflow-y-auto scr ml-16 scrollbar-hide"
         style="background-image: url('/src/assets/Group 39.png'); background-repeat: no-repeat; background-position: 120% 0.5%; background-size: 700px auto; background-attachment: fixed;">
-        <Teams v-if="activeComponent === 'teams'" />
+        <Teams v-if="activeComponent === 'teams'" @backToHome="resetView" :key="teamsKey" />
         <Homeworks v-if="activeComponent === 'homework'" />
+        <UseProfile v-if="activeComponent === 'profile'" :user="selectedUserProfile" />
       </div>
     </div>
 
@@ -134,13 +151,12 @@ onMounted(() => {
           Chat
         </span>
       </template>
-      <Chat></Chat>
+      <Chat @view-profile="openUserProfile" />
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-
 .app-container {
   height: 100vh;
   display: flex;
@@ -252,5 +268,16 @@ onMounted(() => {
   color: #e0e0e0;
   /* Lavender color */
   align-items: center;
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+:deep(.scrollbar-hide::-webkit-scrollbar) {
+  width: 0px;
+  height: 0px;
+  background: transparent;
 }
 </style>
