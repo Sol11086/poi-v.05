@@ -11,7 +11,7 @@ const app = express();
 // Permitir solicitudes desde ngrok (temporalmente acepta todos para pruebas)
 app.use(cors({
     origin: '*', // Cambiar a dominio estando en producción
-  }))
+}))
 
 app.use(express.json()); // Para parsear JSON en el cuerpo de las solicitudes
 const server = createServer(app);
@@ -61,7 +61,7 @@ app.post('/login', (req, res) => {
         }
 
         const user = result[0];
-        
+
         // Verificar contraseña
         if (user.password === password) {
             // Generar un token JWT
@@ -136,6 +136,50 @@ io.on("connection", (socket) => {
         //leaveAllRooms();
     });
 });
+
+//////VIDEO_LLAMADA////////
+
+//PLEEASE SO FOR ONCE IN MY LIFE
+////Let me get WHAT I WANT 
+///LORD KNOWA. IT WOULD BE THE FIRST TIME
+
+socket.on("webrtc-offer", ({ to, offer }) => {
+    socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
+});
+
+socket.on("webrtc-answer", ({ to, answer }) => {
+    socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
+});
+
+socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+    socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
+});
+
+// Opcional: notificar que un usuario está listo para llamar
+socket.on("ready-for-call", ({ room }) => {
+    socket.to(room).emit("user-ready", { id: socket.id });
+});
+
+
+/////FIN VIDEOLLAMADA///////
+
+socket.on("webrtc-offer", ({ to, offer }) => {
+    socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
+});
+
+socket.on("webrtc-answer", ({ to, answer }) => {
+    socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
+});
+
+socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+    socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
+});
+
+// Opcional: notificar que un usuario está listo para llamar
+socket.on("ready-for-call", ({ room }) => {
+    socket.to(room).emit("user-ready", { id: socket.id });
+});
+
 
 server.listen(3000, () => {
     console.log("Servidor corriendo en http://localhost:3000");

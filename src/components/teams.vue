@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import Chat from "@/components/chat.vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
@@ -8,6 +8,8 @@ import { InputText } from "primevue";
 import { content, header } from "@primeuix/themes/aura/accordion";
 import GeneralTeams from "./GeneralTeams.vue";
 
+const remotePeerId = ref('');
+const currentCall = ref(null);
 
 onMounted(() => {
     equipos.value = [
@@ -41,6 +43,124 @@ const visibleRight = ref(false);
 const microphoneOn = ref(false);
 const cameraOn = ref(false);
 const audioOn = ref(false);
+
+const localVideoRef = ref<HTMLVideoElement | null>(null);
+const remoteVideoRef = ref<HTMLVideoElement | null>(null);
+const peer = new Peer(); // Si estás usando PeerJS
+let localStream: MediaStream;
+
+peer.on('call', call => {
+    call.answer(localStream)
+    call.on('stream', remoteStream => {
+        remoteVideoRef.srcObject = remoteStream
+    })
+})
+
+const startCall = async () => {
+    try {
+        // Obtener acceso a la cámara y micrófono
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+        // Asignar stream local al video local
+        if (localVideoRef.value) {
+            localVideoRef.value.srcObject = stream;
+        }
+
+        // Hacer la llamada usando callId como remote peer ID
+        if (!callId) {
+            console.error("callId no está definido.");
+            return;
+        }
+
+        const call = peer.call(callId, stream);
+
+        // Escuchar el stream remoto y asignarlo al video remoto
+        call.on('stream', (remoteStream) => {
+            if (remoteVideoRef.value) {
+                remoteVideoRef.value.srcObject = remoteStream;
+            }
+        });
+
+        // Guardar stream y llamada para detener luego
+        currentCall.value = call;
+        localStream.value = stream;
+
+    } catch (error) {
+        console.error('Error al iniciar llamada:', error);
+    }
+};
+
+function handleCallClick(id: number) {
+    remotePeerId.value = id;
+    callId.value = id;
+    cameraOn.value = true; // Opcional si quieres encenderla automáticamente
+    microphoneOn.value = true;
+    startCall(id);
+}
+
+function endCall() {
+    // Detener la cámara y el micrófono
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    // (Opcional) cerrar la conexión peer si estás usando PeerJS
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    // Limpiar referencias del video
+    if (localVideoRef.value) {
+        localVideoRef.value.srcObject = null;
+    }
+    if (remoteVideoRef.value) {
+        remoteVideoRef.value.srcObject = null;
+    }
+
+    // Apagar los flags de cámara y micrófono
+    cameraOn.value = false;
+    microphoneOn.value = false;
+
+    // Cerrar el diálogo (esto también oculta el modal)
+    callId.value = null;
+}
+
+watch([cameraOn, callId], async ([cam, id]) => {
+    if (cam && id !== null) {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            if (localVideoRef.value) {
+                localVideoRef.value.srcObject = localStream;
+            }
+            console.log('✅ Cámara activada');
+        } catch (error) {
+            console.error('🚫 No se pudo acceder a la cámara/micrófono:', error);
+            alert('Activa los permisos de cámara y micrófono para iniciar la llamada.');
+            cameraOn.value = false;
+        }
+    }
+});
+
+// Detén el stream cuando se cierra el diálogo o se apaga la cámara
+watch([callId, cameraOn], ([id, cam]) => {
+    if (id === null || !cam) {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+            console.log('📴 Cámara detenida');
+        }
+    }
+});
+
+// Limpia cuando se destruye el componente
+onUnmounted(() => {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+});
+
 
 // chat script
 
@@ -124,8 +244,8 @@ const showGeneral = ref(false)
 const emit = defineEmits(['backToHome']) // o el nombre que uses en Home
 
 function handleBack() {
-  showGeneral.value = false
-  emit('backToHome') // Opcional si quieres que Home sepa
+    showGeneral.value = false
+    emit('backToHome') // Opcional si quieres que Home sepa
 }
 </script>
 
@@ -150,7 +270,7 @@ function handleBack() {
                 <Button variant="link"
                     class="flex justify-center items-center mt-2 font-bold text-[#9F86F9] hover:text-[#463583]">{{
                         equipo.nombre }}</Button>
-                <p class="flex justify-center items-center mt-2 text-gray-200 text-center" >{{ equipo.description }}</p>
+                <p class="flex justify-center items-center mt-2 text-gray-200 text-center">{{ equipo.description }}</p>
                 <div class="justify-center flex gap-4 mt-2">
                     <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
                         class="text-[#129E82] p-1" @click="activeCallTeamId = equipo.id"
@@ -165,10 +285,10 @@ function handleBack() {
                         <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
                             <span class="text-gray-500"> Comenzar llamada </span>
                             <div class="relative w-fit h-fit">
-                                <Button icon="pi pi-phone" @click="callId = equipo.id"
+                                <Button icon="pi pi-phone" @click="handleCallClick"
                                     class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
                                 <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
-                                    @click="callId = equipo.id"></i>
+                                    @click="handleCallClick"></i>
                             </div>
                             <Button icon="pi pi-times" @click="activeCallTeamId = false"
                                 class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
@@ -201,8 +321,13 @@ function handleBack() {
                                     :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
                             </div>
                             <div>
-                                <Button severity="secondary" @click="callId = false" label="Colgar llamada"
-                                    class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm font-light hover:bg-[#8a2222] hover:text-white" />
+                                <Button severity="secondary" @click="endCall" label="Colgar llamada" class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm 
+                                    font-light hover:bg-[#8a2222] hover:text-white" />
+                            </div>
+                            <div>
+                                <span class="text-white font-bold">Sala: {{ roomId }}</span>
+                                <Button label="Copiar ID" @click="copyToClipboard(roomId)" icon="pi pi-copy"
+                                    class="text-xs text-[#9F86F9]" />
                             </div>
                         </div>
                     </template>
@@ -232,18 +357,20 @@ function handleBack() {
                                 </div>
                             </div>
                         </div>
-                        <div v-if="cameraOn" class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
+                        <video ref="localVideoRef" autoplay muted v-if="cameraOn"
+                            class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
                             Tu camara
-                        </div>
-                        <div class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
+                        </video>
+                        <video ref="remoteVideoRef" autoplay
+                            class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
                             <span class="text-xl"> En espera </span>
                             <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
-                        </div>
+                        </video>
                     </div>
                 </Dialog>
             </div>
         </div>
-        <div v-else class="h-full" >
+        <div v-else class="h-full">
             <div v-if="selectedTeam" class="h-full">
                 <GeneralTeams :equipos="id" @backToTeamsList="handleBack"></GeneralTeams>
             </div>
