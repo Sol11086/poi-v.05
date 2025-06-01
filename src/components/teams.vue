@@ -43,6 +43,43 @@ const microphoneOn = ref(false);
 const cameraOn = ref(false);
 const audioOn = ref(false);
 
+const API_BASE_URL = 'http://localhost:3000';
+
+const fetchEquipos = async () => {
+  const token = localStorage.getItem('user_token');
+  if (!token) {
+    // Manejar no autenticado
+    return;
+  }
+  // const currentUser = parseJwt(token); // No es necesario aquí si el backend ya filtra por usuario
+
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/my-teams`, { //
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.data.success) {
+      equipos.value = response.data.teams;
+    }
+  } catch (error) {
+    console.error("Error al cargar equipos:", error);
+  }
+};
+
+
+const selectTeam = (teamId) => {
+  if (generalId.value === teamId) {
+    // Opcional: Deseleccionar si se hace clic de nuevo en el mismo equipo
+    // selectedTeamId.value = null;
+  } else {
+    generalId.value = teamId;
+  }
+  console.log("Equipo seleccionado ID:", generalId.value);
+};
+
+onMounted(() => {
+  fetchEquipos();
+});
+
 import { jwtDecode } from 'jwt-decode';
 
 // chat script
@@ -295,7 +332,7 @@ function handleBack() {
         <div v-else-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
             <div v-for="equipo in equipos" :key="equipo.id"
                 class="bg-[#04293C] rounded-lg shadow-md hover:bg-[#163a4e] p-4 grid justify-center"
-                @click="generalId = equipo.id">
+                :class="{ 'active-team': selectedTeamId === equipo.id }" @click="selectTeam(equipo.id)">
                 <div class="w-[500px] h-[500px] overflow-hidden relative rounded">
                     <img :src="getImageUrl(equipo.image)" :alt="equipo.team_name"
                         class="absolute w-full h-full object-cover" />
@@ -401,7 +438,7 @@ function handleBack() {
         </div>
         <div v-else class="h-full">
             <div v-if="selectedTeam" class="h-full">
-                <GeneralTeams :equipos="id" @backToTeamsList="handleBack"></GeneralTeams>
+                <GeneralTeams :current-team-id="generalId" @backToTeamsList="handleBack"></GeneralTeams>
             </div>
         </div>
     </div>

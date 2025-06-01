@@ -27,7 +27,7 @@ const io = new Server(server, {
 const connection = mysql.createConnection({
     host: 'localhost',     //host de la base de datos
     user: 'root',          // usuario de la base de datos
-    password: '12345',  // contraseña
+    password: '',  // contraseña
     database: 'db_poi_v1', // nombre de la base de datos
     port: 33065     // puerto donde está corriendo MySQL (por defecto 3306)
 });
@@ -206,6 +206,114 @@ app.get('/api/my-teams', authenticateToken, async (req, res) => {
     }
 });
 
+// GET /api/teams/:teamId/channels - Fetches all channels for a specific team
+app.get('/api/teams/:teamId/channels', authenticateToken, (req, res) => {
+    const { teamId } = req.params;
+    if (!teamId) {
+        return res.status(400).json({ success: false, error: "Team ID is required." });
+    }
+
+    const query = 'SELECT id, team_id, channel_name, created_at FROM team_channels WHERE team_id = ? ORDER BY created_at ASC';
+    connection.query(query, [teamId], (err, results) => {
+        if (err) {
+            console.error("Error fetching channels for team:", err);
+            return res.status(500).json({ success: false, error: "Error fetching channels." });
+        }
+        res.status(200).json({ success: true, channels: results });
+    });
+});
+
+// POST /api/teams/:teamId/channels - Creates a new channel in a team (admin only)
+app.post('/api/teams/:teamId/channels', authenticateToken, async (req, res) => {
+    const { teamId: routeTeamId } = req.params;
+    const { channel_name } = req.body;
+    const userId = req.user.id;
+
+    if (!channel_name) {
+        return res.status(400).json({ success: false, error: "Channel name is required." });
+    }
+    if (!routeTeamId) {
+        return res.status(400).json({ success: false, error: "Team ID is required in path." });
+    }
+
+    // Step 1: Verify if the user is an admin of this team
+    const isAdminQuery = 'SELECT role FROM team_members WHERE team_id = ? AND user_id = ?';
+    connection.query(isAdminQuery, [routeTeamId, userId], async (adminErr, adminResults) => {
+        if (adminErr) {
+            console.error("Error checking admin role:", adminErr);
+            return res.status(500).json({ success: false, error: "Error verifying user role." });
+        }
+        if (adminResults.length === 0 || adminResults[0].role !== 'admin') {
+            // Also check if the user is the owner of the team as a fallback admin role
+            const isOwnerQuery = 'SELECT owner_id FROM teams WHERE id = ?';
+            connection.query(isOwnerQuery, [routeTeamId], async (ownerErr, ownerResults) => {
+                if (ownerErr) {
+                     console.error("Error checking team owner:", ownerErr);
+                     return res.status(500).json({ success: false, error: "Error verifying team ownership." });
+                }
+                if (ownerResults.length === 0 || ownerResults[0].owner_id !== userId) {
+                    return res.status(403).json({ success: false, error: "User is not an admin or owner of this team." });
+                }
+                 // If owner, proceed to create channel
+                await proceedWithChannelCreation();
+            });
+        } else {
+             // If admin, proceed to create channel
+            await proceedWithChannelCreation();
+        }
+    });
+
+    async function proceedWithChannelCreation() {
+        try {
+            // ManejarTeamChannel_Promise uses team_id and channel_name
+            const channelResult = await ManejarTeamChannel_Promise({ team_id: routeTeamId, channel_name });
+            if (channelResult.success) {
+                const getChannelQuery = 'SELECT id, team_id, channel_name, created_at FROM team_channels WHERE id = ?';
+                connection.query(getChannelQuery, [channelResult.channel_id], (err, newChannelDetails) => {
+                    if (err || newChannelDetails.length === 0) {
+                        console.error("Error fetching newly created/found channel details:", err);
+                        return res.status(500).json({ success: false, error: "Channel processed but could not retrieve details." });
+                    }
+                    
+                    // Optionally: Emit an event to team members about the new channel
+                    // io.to(`team-${routeTeamId}`).emit('channelCreated', newChannelDetails[0]);
+                    // (Clients would need to join `team-${routeTeamId}` rooms upon team selection)
+
+                    res.status(channelResult.created ? 201 : 200).json({
+                        success: true,
+                        message: channelResult.created ? "Channel created successfully." : "Channel already exists.",
+                        channel: newChannelDetails[0],
+                        created: channelResult.created
+                    });
+                });
+            } else {
+                throw new Error(channelResult.error || "Failed to create/get channel.");
+            }
+        } catch (error) {
+            console.error("Error in POST /api/teams/:teamId/channels endpoint (proceedWithChannelCreation):", error.message);
+            res.status(500).json({ success: false, error: error.message || "Server error while creating channel." });
+        }
+    }
+});
+
+// GET /api/teams/:teamId/members - Fetches members and their roles for a team
+app.get('/api/teams/:teamId/members', authenticateToken, (req, res) => {
+    const { teamId } = req.params;
+    const query = `
+        SELECT tm.user_id, u.username, tm.role 
+        FROM team_members tm
+        JOIN users u ON tm.user_id = u.id
+        WHERE tm.team_id = ?
+    `;
+    connection.query(query, [teamId], (err, results) => {
+        if (err) {
+            console.error("Error fetching team members:", err);
+            return res.status(500).json({ success: false, error: "Error fetching team members." });
+        }
+        res.status(200).json({ success: true, members: results });
+    });
+});
+
 // connection.end(); // Cerrar la conexión a la base de datos al finalizar
 //----------- FIN DE LA CONFIGURACION DE LA BASE DE DATOS ----------
 // NEW: Handler to get or create a team channel
@@ -224,7 +332,7 @@ async function ManejarTeamChannel_Promise({ team_id, channel_name }) {
             if (results.length > 0) {
                 resolve({ success: true, channel_id: results[0].id, created: false });
             } else {
-                const newChannelId = generateVarchar15ID();
+                const newChannelId = generateMessageID();// generar 15 caracteres hexadecimales
                 const insertQuery = 'INSERT INTO team_channels (id, team_id, channel_name) VALUES (?, ?, ?)';
                 connection.query(insertQuery, [newChannelId, team_id, channel_name], (insertErr) => {
                     if (insertErr) {

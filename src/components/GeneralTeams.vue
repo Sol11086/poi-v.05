@@ -1,244 +1,578 @@
-<script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from "vue";
-import Chat from "@/components/chat.vue";
-import 'primeicons/primeicons.css'
-import socket from "@/utils/socket.js";
-import { parseJwt } from '@/utils/jwt.js';
-import { InputText } from "primevue";
-import { content, header } from "@primeuix/themes/aura/accordion";
+<template>
+  <div class="team-view" v-if="currentTeamId && !isLoading">
+    <div class="team-header" v-if="team">
+      <Button icon="pi pi-arrow-left" variant="text" size="small" @click="$emit('backToTeamsList')" rounded
+      class="text-gray-500 hover:bg-[#173c4e] mx-[3px]" />
+      <h1>{{ team.name }}</h1>
+    </div>
+    <div v-else-if="!team && !isLoading" class="team-header">
+      </div>
+    <div v-else class="team-header"><h1>Cargando equipo...</h1></div>
 
-const canalActivo = ref(1)
-function toggleCanal(canal) {
-    canalActivo.value = canal
-}
+    <div class="main-layout">
+      <div class="channels-sidebar">
+        <h2>Canales</h2>
+        <ul v-if="channels.length > 0">
+          <li
+            v-for="channel in channels"
+            :key="channel.id"
+            @click="selectChannel(channel)"
+            :class="{ 'active-channel': selectedChannel && selectedChannel.id === channel.id }"
+          >
+            # {{ channel.channel_name }}
+          </li>
+        </ul>
+        <p v-else-if="!isLoadingChannels && team">No hay canales aún.</p>
+        <p v-if="isLoadingChannels">Cargando canales...</p>
 
-const equipos = ref<{ nombre: string; urlImagen: string }[]>([]);
+        <div v-if="isAdmin && team" class="create-channel-section">
+          <input v-model="newChannelName" placeholder="Nombre del nuevo canal" @keyup.enter="createChannel"/>
+          <button @click="createChannel">Crear Canal</button>
+        </div>
+      </div>
 
-// chat script
+      <div class="chat-area" v-if="selectedChannel">
+        <div class="chat-header">
+            <h3># {{ selectedChannel.channel_name }}</h3>
+        </div>
+        <div class="messages-list" ref="messagesContainer">
+          <div v-for="msg in messages" :key="msg.id" class="message-item">
+            <span class="message-sender">{{ msg.user.username }}:</span>
+            <p class="message-content">{{ msg.message }}</p>
+            <span class="message-time">{{ msg.time }}</span>
+          </div>
+           <div v-if="messages.length === 0 && !isLoadingMessages" class="no-messages">
+            No hay mensajes en este canal todavía.
+          </div>
+           <div v-if="isLoadingMessages" class="no-messages">Cargando mensajes...</div>
+        </div>
+        <div class="message-input">
+          <input v-model="newMessageText" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..." />
+          <button @click="sendMessage">Enviar</button>
+        </div>
+      </div>
+      <div v-else class="chat-area-placeholder">
+        <p v-if="team && channels.length > 0">Selecciona un canal para comenzar a chatear.</p>
+        <p v-else-if="team && !isLoadingChannels && isAdmin">Crea un canal para comenzar.</p>
+        <p v-else-if="team && !isLoadingChannels && !isAdmin">Este equipo aún no tiene canales.</p>
+        <p v-if="!team && !isLoading">Selecciona un equipo.</p>
+      </div>
+    </div>
+  </div>
+  <div v-else-if="isLoading && currentTeamId" class="loading-placeholder">
+    <p>Cargando datos del equipo...</p>
+  </div>
+  </template>
 
-socket.on("connect", () => {
-    console.log("Conectado al servidor con ID:", socket.id);
-});
+<script setup>
+import { ref, onMounted, watch, nextTick, onUnmounted,defineProps } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import socket from '@/utils/socket'; //
+import { parseJwt } from '@/utils/jwt'; //
+import axios from 'axios';
+
+const router = useRoute();
 
 
-const token = localStorage.getItem('user_token');
-const username = parseJwt(token).username;
-
-const chats = ref([
-    { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
-    { id: 2, name: 'María', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg' },
-    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png' }
-]);
-
-const selectedChat = ref(null);
+const team = ref(null);
+const channels = ref([]);
+const selectedChannel = ref(null);
 const messages = ref([]);
-const newMessage = ref('');
+const newMessageText = ref('');
+const newChannelName = ref('');
+const currentUser = ref(null);
+const isAdmin = ref(false);
+const messagesContainer = ref(null);
 
-//const room = ref(""); // implementar cuando se tenga conexión con la base
-const isJoined = ref(false);
+const isLoading = ref(false);
+const isLoadingChannels = ref(false);
+const isLoadingMessages = ref(false);
 
-// Salir de la sala - implementar cuando el usuario abandone el grupo
-// const leaveRoom = (room) => {
-//   socket.emit("leaveRoom", room);
-// };
+const API_BASE_URL = 'http://localhost:3000'; // Ensure this matches your backend URL
+ const token = localStorage.getItem('user_token');// token de usuario
 
-// Resetear estado al salir de la sala
-socket.on("leftRoom", () => {
-    messages.value = [];
-    isJoined.value = false;
-    room.value = "";
+const props = defineProps({
+  currentTeamId: {
+    type: String,
+    default: null, // Permite que sea null inicialmente
+  }
 });
 
-// Escuchar mensajes previos cuando se une a una sala
-socket.on("previousMessages", (history) => {
-    messages.value = history;
-});
-
-const selectChat = (chat) => {
-    selectedChat.value = chat;
-    messages.value = [];
-    chat.unreadMessages = 0; // Resetear notificaciones
-    socket.emit("loadMessages", chat.id);
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+    }
+  });
 };
 
-const sendMessage = () => {
-    if (newMessage.value.trim() === '') return;
-    socket.emit("sendMessage", {
-        room: selectedChat.value.id,//id del chat 
-        message: newMessage.value,
-        user: username || "Anónimo",
+const resetComponentState = () => {
+    team.value = null;
+    channels.value = [];
+    selectedChannel.value = null;
+    messages.value = [];
+    isAdmin.value = false;
+    newChannelName.value = '';
+    newMessageText.value = '';
+};
+
+const initializeTeamData = async (teamIdToLoad) => {
+  if (!teamIdToLoad) {
+    resetComponentState();
+    isLoading.value = false;
+    return;
+  }
+
+  isLoading.value = true;
+  resetComponentState(); // Limpia el estado anterior antes de cargar nuevo
+  
+  const decoded = parseJwt(token);
+  currentUser.value = decoded;
+  
+  if (!currentUser.value) {
+    console.error("Usuario no autenticado.");
+    router.push('/login');
+    isLoading.value = false;
+    return;
+  }
+
+  try {
+    
+    // 1. Fetch Detalles del Equipo
+    // Asumimos que /api/my-teams devuelve los equipos del usuario y podemos filtrar.
+    // Si tienes un endpoint /api/teams/:id que devuelva solo uno, sería más directo.
+    const teamDetailsResponse = await axios.get(`${API_BASE_URL}/api/my-teams`, { //
+      headers: { Authorization: `Bearer ${token}` }
     });
-    newMessage.value = '';
-};
+    let foundTeam = null;
+    if (teamDetailsResponse.data.success) {
+        foundTeam = teamDetailsResponse.data.teams.find(t => t.id === teamIdToLoad);
+    }
 
-//Escuchar mensajes recibidos
-onMounted(() => {
-    const roomIds = chats.value.map(chat => chat.id); // Extrae solo los IDs de las salas
-    socket.emit("joinAllRooms", roomIds);
+    if (foundTeam) {
+      team.value = {
+        id: foundTeam.id,
+        name: foundTeam.team_name,
+        owner_id: foundTeam.owner_id,
+      };
 
-    socket.on("receiveMessage", (message) => {
-        if (selectedChat.value && selectedChat.value.id === message.room) {
-            messages.value.push(message);
-        } else {
-            console.log(`Mensaje recibido en otra sala (${message.room}):`, message);
-            const chat = chats.value.find(c => c.id === message.room);
-            if (chat) chat.unreadMessages += 1; // Incrementa contador de mensajes no leídos
+      // 2. Fetch Miembros del Equipo y Establecer si es Admin
+      const membersResponse = await axios.get(`${API_BASE_URL}/api/teams/${teamIdToLoad}/members`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (membersResponse.data.success) {
+        const currentUserMemberInfo = membersResponse.data.members.find(m => m.user_id === currentUser.value.id);
+        isAdmin.value = (currentUserMemberInfo && currentUserMemberInfo.role === 'admin') || (currentUser.value.id === team.value.owner_id);
+      } else {
+        isAdmin.value = (currentUser.value.id === team.value.owner_id); // Fallback
+      }
+
+      // 3. Fetch Canales
+      isLoadingChannels.value = true;
+      const channelsResponse = await axios.get(`${API_BASE_URL}/api/teams/${teamIdToLoad}/channels`, {
+          headers: { Authorization: `Bearer ${token}` }
+      });
+      if (channelsResponse.data.success) {
+        channels.value = channelsResponse.data.channels;
+        if (channels.value.length > 0) {
+          // Podrías auto-seleccionar el primer canal si lo deseas:
+          // selectChannel(channels.value[0]);
         }
+      } else {
+        channels.value = [];
+      }
+      isLoadingChannels.value = false;
+
+    } else {
+      console.error(`Equipo con ID ${teamIdToLoad} no encontrado.`);
+      // No es necesario redirigir aquí, el padre maneja la visualización.
+    }
+  } catch (error) {
+    console.error("Error inicializando datos del equipo:", error.response ? error.response.data : error.message);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+watch(() => props.currentTeamId, (newTeamId) => {
+  console.log(`GeneralTeams: currentTeamId cambió a: ${newTeamId}`);
+  initializeTeamData(newTeamId);
+}, { immediate: true });
+
+const fetchTeamDetails = async (id) => {
+  try {
+    // Assuming /api/my-teams returns an array of teams user is part of
+    // You might need a specific endpoint like /api/teams/:id if not already covered
+    const response = await axios.get(`${API_BASE_URL}/api/my-teams`, {
+      headers: { Authorization: `Bearer ${token}` }
     });
+    if (response.data.success) {
+      const foundTeam = response.data.teams.find(t => t.id === id);
+      if (foundTeam) {
+        team.value = { // Map to a simpler team object for the view
+          id: foundTeam.id,
+          name: foundTeam.team_name,
+          owner_id: foundTeam.owner_id,
+          // caption: foundTeam.caption, // from schema
+          // image: foundTeam.image // from schema
+        };
+      } else {
+        console.error("Team not found in user's teams or API error.");
+        // router.push('/home'); // Or some error page
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching team details:", error);
+    // router.push('/login'); // Or handle error appropriately
+  }
+};
+
+const fetchTeamMembersAndSetAdmin = async (currentTeamId) => {
+  if (!currentUser.value) return;
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/teams/${currentTeamId}/members`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.data.success) {
+      const currentUserMemberInfo = response.data.members.find(m => m.user_id === currentUser.value.id);
+      if (currentUserMemberInfo && currentUserMemberInfo.role === 'admin') {
+        isAdmin.value = true;
+      } else if (team.value && currentUser.value.id === team.value.owner_id) { // Fallback to owner
+        isAdmin.value = true;
+      } else {
+        isAdmin.value = false;
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching team members:", error);
+    // Fallback check if team owner
+    if (team.value && currentUser.value && currentUser.value.id === team.value.owner_id) {
+        isAdmin.value = true;
+    } else {
+        isAdmin.value = false;
+    }
+  }
+};
+
+const fetchChannels = async (currentTeamId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/teams/${currentTeamId}/channels`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.data.success) {
+      channels.value = response.data.channels;
+      // Optionally auto-select the first channel if none is selected and channels exist
+      if (channels.value.length > 0 && !selectedChannel.value) {
+         // selectChannel(channels.value[0]); // Decide if you want to auto-select
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching channels:", error);
+    channels.value = [];
+  }
+};
+
+// --- Manejadores de Eventos de Socket ---
+const handlePreviousMessages = (loadedMessages) => {
+  isLoadingMessages.value = false;
+  if (selectedChannel.value) { // Asegurarse que hay un canal seleccionado
+    // El servidor ya filtra los mensajes por sala, así que si `loadedMessages[0].room` existe y coincide, es para este canal.
+    // O si es un array vacío, también es para este canal (sin mensajes).
+    if (loadedMessages.length > 0 && loadedMessages[0].room === selectedChannel.value.id) {
+        messages.value = loadedMessages;
+    } else if (loadedMessages.length === 0) { // Array vacío significa que no hay mensajes para ESTA sala
+        messages.value = [];
+    }
+    // Si loadedMessages[0].room no coincide, es un mensaje tardío de otra sala, no lo cargues.
+  } else {
+      messages.value = []; // No hay canal seleccionado, no mostrar mensajes.
+  }
+  scrollToBottom();
+};
+
+const handleReceiveMessage = (newMessage) => {
+  if (selectedChannel.value && newMessage.room === selectedChannel.value.id) {
+    messages.value.push(newMessage);
+    scrollToBottom();
+  }
+};
+
+const handleMessageError = (error) => {
+  console.error("Error de mensaje desde el servidor:", error.message);
+  alert(`Error de mensaje: ${error.message}`);
+};
+
+// Registrar y limpiar listeners de socket
+onMounted(() => {
+  socket.on("previousMessages", handlePreviousMessages);
+  socket.on("receiveMessage", handleReceiveMessage);
+  socket.on("messageError", handleMessageError);
 });
 
 onUnmounted(() => {
-    socket.off("receiveMessage");
+  socket.off("previousMessages", handlePreviousMessages);
+  socket.off("receiveMessage", handleReceiveMessage);
+  socket.off("messageError", handleMessageError);
+  if (selectedChannel.value) {
+    // Considerar si es necesario un evento socket.emit("leaveRoom", selectedChannel.value.id);
+  }
 });
 
+// Observador para cuando cambia el canal seleccionado
+watch(selectedChannel, (newCh, oldCh) => {
+  if (newCh && (!oldCh || newCh.id !== oldCh.id)) {
+    messages.value = [];
+    isLoadingMessages.value = true;
+    socket.emit("joinAllRooms", [newCh.id]); //
+    console.log(`[Cliente] Cambiado a canal. Emitiendo loadMessages para sala: ${newCh.id}, tipo: channel`);
+    socket.emit("loadMessages", { room: newCh.id, roomType: 'channel' }); //
+  } else if (!newCh) {
+    messages.value = [];
+  }
+});
 
+// --- Métodos ---
+const selectChannel = (channel) => {
+  if (selectedChannel.value?.id !== channel.id) {
+    selectedChannel.value = channel;
+  }
+};
+
+const sendMessage = () => {
+  if (!newMessageText.value.trim() || !selectedChannel.value || !currentUser.value || !team.value) return;
+  socket.emit("sendMessage", { //
+    room: selectedChannel.value.id,
+    message: newMessageText.value,
+    sender_id: currentUser.value.id,
+    team_id: team.value.id,
+    channel_name: selectedChannel.value.channel_name,
+    roomType: 'channel',
+  });
+  newMessageText.value = '';
+};
+
+const createChannel = async () => {
+  if (!newChannelName.value.trim() || !isAdmin.value || !team.value) {
+      alert("El nombre del canal no puede estar vacío, no tienes permiso o no hay un equipo cargado.");
+      return;
+  }
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/teams/${team.value.id}/channels`,
+      { channel_name: newChannelName.value },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (response.data.success && response.data.channel) {
+      if (!channels.value.find(ch => ch.id === response.data.channel.id)) {
+        channels.value.push(response.data.channel);
+      }
+      newChannelName.value = '';
+      selectChannel(response.data.channel);
+    } else {
+      alert(`Error al crear canal: ${response.data.error || 'Error desconocido'}`);
+    }
+  } catch (error) {
+    console.error("Error API al crear canal:", error);
+    alert(`Error API al crear canal: ${error.response?.data?.error || error.message}`);
+  }
+};
 
 </script>
+<style scoped>
+/* Los estilos son similares a la respuesta anterior, puedes mantenerlos o ajustarlos */
+.team-view {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 60px); /* Ajusta si tienes una barra de navegación global */
+  color: var(--p-text-color);
+  background-color: var(--p-surface-900);
+}
+.loading-placeholder, .no-team-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: var(--p-text-muted-color);
+}
+.team-header {
+  display: flex;
+  padding: 1rem .5rem;
+  background-color: var(--p-surface-800);
+  border-bottom: 1px solid var(--p-surface-700);
+  color: #8164ed;
+}
+.team-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
 
-<template>
-    <div class="flex h-full">
-        <div class="grid bg-[#071922] h-full w-1/3 p-4">
-            <div class="grid h-6/12">
-                <div class="flex items-center gap-4">
-                    <Button icon="pi pi-arrow-left" variant="text" size="small" @click="$emit('backToTeamsList')" rounded
-                    class="text-gray-500 hover:bg-[#173c4e]" />
-                    <div class="text-gray-500 items-center"> Canales de chat </div>
-                </div>
-                <Button class="hover:bg-[#173c4e] text-gray-300 h-fit p-2" @click="toggleCanal(1)"># Canal 1</Button>
-                <Button class="hover:bg-[#173c4e] text-gray-300 h-fit p-2" @click="toggleCanal(2)"># Canal 2</Button>
-                <Button class="hover:bg-[#173c4e] text-gray-300 h-fit p-2" @click="toggleCanal(3)"># Canal 3</Button>
-                <Button class="hover:bg-[#173c4e] text-gray-300 h-fit p-2" @click="toggleCanal(4)"># Canal 4</Button>
-                <Button class="hover:bg-[#173c4e] text-gray-300 h-fit p-2" @click="toggleCanal(5)"># Canal 5</Button>
+.main-layout {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
 
-            </div>
-        </div>
+.channels-sidebar {
+  width: 280px;
+  background-color: var(--p-surface-800);
+  padding: 1rem;
+  border-right: 1px solid var(--p-surface-700);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.channels-sidebar h2 {
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--p-text-muted-color);
+}
+.channels-sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1;
+}
+.channels-sidebar li {
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  border-radius: var(--p-content-border-radius);
+  margin-bottom: 0.25rem;
+  color: var(--p-text-muted-color);
+  transition: background-color 0.2s, color 0.2s;
+}
+.channels-sidebar li:hover {
+  background-color: var(--p-content-hover-background);
+  color: var(--p-text-hover-color);
+}
+.channels-sidebar li.active-channel {
+  background-color: var(--p-primary-color);
+  color: var(--p-primary-contrast-color);
+  font-weight: 500;
+}
+.channels-sidebar p { /* Para mensajes de "No hay canales" */
+    color: var(--p-text-muted-color);
+    font-style: italic;
+    text-align: center;
+    margin-top: 1rem;
+}
+.create-channel-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--p-surface-700);
+}
+.create-channel-section input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.5rem;
+  background-color: var(--p-surface-700);
+  border: 1px solid var(--p-surface-600);
+  color: white;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.create-channel-section button {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background-color: var(--p-primary-500);
+  color: var(--p-primary-contrast-color);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.create-channel-section button:hover {
+  background-color: var(--p-primary-600);
+}
 
-        <div v-if="canalActivo === 1" class="w-2/3">
-            <div class="h-10/12">
-                <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#071922] p-4">
-                    <i class="pi pi-comment"></i>
-                    <div>
-                        <p class="chat-header-status">Canal 1</p>
-                    </div>
-                </div>
-                <div class="h-full bg-[#030d11] p-4">
-                    <!-- <small class="text-gray-500"> {{ user.username }}</small> -->
-                    <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
-                        class="message-item">
-                        <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
-                            {{ msg.message }}
-                        </p>
-                    </div>
-                </div>
-                <div class="bg-[#071922] flex items-center justify-between p-4">
-                    <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
-                        class="bg-[#030d11] text-white p-2 w-full" />
-                    <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
-                        class="hover:text-[#129E82]" />
-                </div>
-            </div>
-        </div>
-        <div v-if="canalActivo === 2" class="w-2/3">
-            <div class="h-10/12">
-                <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#071922] p-4">
-                    <i class="pi pi-comment"></i>
-                    <div>
-                        <p class="chat-header-status">Canal 2</p>
-                    </div>
-                </div>
-                <div class="h-full bg-[#030d11] p-4">
-                    <!-- <small class="text-gray-500"> {{ user.username }}</small> -->
-                    <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
-                        class="message-item">
-                        <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
-                            {{ msg.message }}
-                        </p>
-                    </div>
-                </div>
-                <div class="bg-[#071922] flex items-center justify-between p-4">
-                    <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
-                        class="bg-[#030d11] text-white p-2 w-full" />
-                    <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
-                        class="hover:text-[#129E82]" />
-                </div>
-            </div>
-        </div>
-        <div v-if="canalActivo === 3" class="w-2/3">
-            <div class="h-10/12">
-                <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#071922] p-4">
-                    <i class="pi pi-comment"></i>
-                    <div>
-                        <p class="chat-header-status">Canal 3</p>
-                    </div>
-                </div>
-                <div class="h-full bg-[#030d11] p-4">
-                    <!-- <small class="text-gray-500"> {{ user.username }}</small> -->
-                    <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
-                        class="message-item">
-                        <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
-                            {{ msg.message }}
-                        </p>
-                    </div>
-                </div>
-                <div class="bg-[#071922] flex items-center justify-between p-4">
-                    <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
-                        class="bg-[#030d11] text-white p-2 w-full" />
-                    <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
-                        class="hover:text-[#129E82]" />
-                </div>
-            </div>
-        </div>
-        <div v-if="canalActivo === 4" class="w-2/3">
-            <div class="h-10/12">
-                <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#071922] p-4">
-                    <i class="pi pi-comment"></i>
-                    <div>
-                        <p class="chat-header-status">Canal 4</p>
-                    </div>
-                </div>
-                <div class="h-full bg-[#030d11] p-4">
-                    <!-- <small class="text-gray-500"> {{ user.username }}</small> -->
-                    <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
-                        class="message-item">
-                        <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
-                            {{ msg.message }}
-                        </p>
-                    </div>
-                </div>
-                <div class="bg-[#071922] flex items-center justify-between p-4">
-                    <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
-                        class="bg-[#030d11] text-white p-2 w-full" />
-                    <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
-                        class="hover:text-[#129E82]" />
-                </div>
-            </div>
-        </div>
-        <div v-if="canalActivo === 5" class="w-2/3">
-            <div class="h-10/12">
-                <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#071922] p-4">
-                    <i class="pi pi-comment"></i>
-                    <div>
-                        <p class="chat-header-status">Canal 5</p>
-                    </div>
-                </div>
-                <div class="h-full bg-[#030d11] p-4">
-                    <!-- <small class="text-gray-500"> {{ user.username }}</small> -->
-                    <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
-                        class="message-item">
-                        <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
-                            {{ msg.message }}
-                        </p>
-                    </div>
-                </div>
-                <div class="bg-[#071922] flex items-center justify-between p-4">
-                    <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
-                        class="bg-[#030d11] text-white p-2 w-full" />
-                    <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
-                        class="hover:text-[#129E82]" />
-                </div>
-            </div>
-        </div>
-    </div>
-</template>
+.chat-area {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--p-surface-900);
+}
+.chat-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--p-surface-700);
+    background-color: var(--p-surface-800);
+    color: cornflowerblue;
+}
+.chat-header h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+.chat-area-placeholder {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--p-text-muted-color);
+  padding: 2rem;
+  text-align: center;
+}
 
-<style></style>
+.messages-list {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 1rem 1.5rem;
+}
+.message-item {
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  background-color: var(--p-surface-800);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.message-sender {
+  font-weight: 600;
+  color: var(--p-primary-500);
+  margin-bottom: 0.25rem;
+  font-size: 0.9em;
+}
+.message-content {
+    margin: 0;
+    line-height: 1.5;
+    word-break: break-word;
+    color: aliceblue;
+}
+.message-time {
+  font-size: 0.75em;
+  color: var(--p-text-muted-color);
+  margin-top: 0.25rem;
+  align-self: flex-end;
+}
+.no-messages {
+    text-align: center;
+    color: var(--p-text-muted-color);
+    margin-top: 2rem;
+    font-style: italic;
+}
+
+.message-input {
+  display: flex;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--p-surface-700);
+  background-color: var(--p-surface-800);
+}
+.message-input input {
+  flex-grow: 1;
+  padding: 0.75rem;
+  border: 1px solid var(--p-surface-600);
+  background-color: var(--p-surface-700);
+  color: white;
+  border-radius: 4px;
+  margin-right: 0.75rem;
+}
+.message-input button {
+  padding: 0.75rem 1.5rem;
+  background-color: var(--p-primary-500);
+  color: var(--p-primary-contrast-color);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.message-input button:hover {
+    background-color: var(--p-primary-600);
+}
+</style>
