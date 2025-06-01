@@ -3,11 +3,11 @@ import { ref, onMounted, onUnmounted } from "vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
 import { parseJwt } from '@/utils/jwt.js';
+import Popover from 'primevue/popover'; // Make sure to import Popover if it's a component
 
 socket.on("connect", () => {
     console.log("Conectado al servidor con ID:", socket.id);
 });
-
 
 const token = localStorage.getItem('user_token');
 const username = parseJwt(token).username;
@@ -15,28 +15,25 @@ const user_id = parseJwt(token).id;
 console.log(user_id);
 
 const chats = ref([
-    { id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private'},
-    { id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private'},
-    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png',type:'channel'}
+    { id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private', status: 'En línea' },
+    { id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private', status: 'Ausente' },
+    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png', type: 'channel', status: 'En línea' }
 ]);
 
 const selectedChat = ref(null);
 const messages = ref([]);
 const newMessage = ref('');
 const currentRoomType = ref('');
-//const room = ref(""); // implementar cuando se tenga conexión con la base
 const isJoined = ref(false);
 
-// Salir de la sala - implementar cuando el usuario abandone el grupo
-// const leaveRoom = (room) => {
-//   socket.emit("leaveRoom", room);
-// };
+// New ref to hold the user data for the popover
+const popoverUser = ref(null);
 
 // Resetear estado al salir de la sala
 socket.on("leftRoom", () => {
     messages.value = [];
     isJoined.value = false;
-    room.value = "";
+    // room.value = ""; // Assuming 'room' is not directly used here
 });
 
 // Escuchar mensajes previos cuando se une a una sala
@@ -59,7 +56,7 @@ const selectChat = (chat) => {
 
 const sendMessage = () => {
     if (newMessage.value.trim() === '') return;
-    
+
     socket.emit("sendMessage", {
         room: selectedChat.value.id,//id del chat 
         message: newMessage.value,
@@ -77,18 +74,24 @@ onMounted(() => {
 
     socket.on("receiveMessage", (message) => {
         console.log(message);
-        //senderID = message.user.id;
-        //senderuser= message.user.username;
-        //Fecha = message.created_at;
-        //Hora = message.time;
         if (selectedChat.value && selectedChat.value.id === message.room) {
             messages.value.push(message);
         } else {
             console.log(`Mensaje recibido en otra sala (${message.room}):`, message);
             const chat = chats.value.find(c => c.id === message.room);
-            if (chat) chat.unreadMessages += 1; // Incrementa contador de mensajes no leídos
+            if (chat) {
+                if (chat.unreadMessages === undefined) {
+                    chat.unreadMessages = 0; // Initialize if not present
+                }
+                chat.unreadMessages += 1; // Incrementa contador de mensajes no leídos
+            }
         }
     });
+
+    // Select the first chat by default or handle initial selection
+    if (chats.value.length > 0) {
+        selectChat(chats.value[0]);
+    }
 });
 
 onUnmounted(() => {
@@ -98,9 +101,14 @@ onUnmounted(() => {
 const emit = defineEmits(['view-profile'])
 
 function goToProfile() {
-  emit('view-profile', selectedChat)
+    emit('view-profile', selectedChat)
 }
 
+const op = ref();
+const togglePopover = (event, user) => {
+    popoverUser.value = user;
+    op.value.toggle(event);
+}
 </script>
 
 <template>
@@ -116,27 +124,25 @@ function goToProfile() {
             </ul>
         </div>
 
-        <!-- Área del chat -->
         <div class="chat-area">
-            <!-- Header del chat -->
             <div v-if="selectedChat" class="chat-header">
-                <img :src="selectedChat.avatar" class="chat-header-avatar"  @click="goToProfile" />
+                <img :src="selectedChat.avatar" class="chat-header-avatar"
+                    @click="togglePopover($event, selectedChat)" />
                 <div>
                     <h2 class="chat-header-title">{{ selectedChat.name }}</h2>
                     <p class="chat-header-status">En línea</p>
                 </div>
             </div>
-            <!-- Mensajes -->
             <div class="message-container">
                 <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user.username === username }"
                     class="message-item">
-                    <p class="message-text" :class="msg.user.username === username ? 'message-sent' : 'message-received'">
+                    <p class="message-text"
+                        :class="msg.user.username === username ? 'message-sent' : 'message-received'">
                         {{ msg.message }}
                     </p>
                 </div>
             </div>
 
-            <!-- Input de mensaje -->
             <div class="message-input">
                 <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
                     class="message-input-field" />
@@ -145,6 +151,34 @@ function goToProfile() {
             </div>
         </div>
     </div>
+
+    <Popover ref="op" class="w-1/5 rounded-xl m-2">
+        <div class="bg-[#1f2329] rounded-lg p-5">
+            <div class="flex gap-4 items-center mb-4">
+                <img :src="popoverUser?.avatar" class=" bg w-10 h-10 rounded-full" />
+                <div class="grid ">
+                    <span class="text-white">{{ popoverUser?.name }}</span>
+                    <p class="text-[#129E82]">{{ popoverUser.status || 'Desconectado' }}</p>
+                </div>
+            </div>
+            <div class="mb-4">
+                <span class="text-gray-400">sol@gmail.com</span>
+            </div>
+            <div class="flex">
+                <div class="bg-[#180e3b] flex gap-2 rounded-l-full p-1 items-center justify-center">
+                    <i class="pi pi-star-fill text-yellow-300 ml-2"></i>
+                    <span class="text-white mr-2">
+                        Recompensas
+                    </span>
+                </div>
+                <div class="bg-[#9F86F9] rounded-r-full flex items-center justify-center">
+                    <span class="text-black p-2">
+                        15
+                    </span>
+                </div>
+            </div>
+        </div>
+    </Popover>
 </template>
 
 <style scoped>

@@ -2,23 +2,21 @@
   <div class="team-view" v-if="currentTeamId && !isLoading">
     <div class="team-header" v-if="team">
       <Button icon="pi pi-arrow-left" variant="text" size="small" @click="$emit('backToTeamsList')" rounded
-      class="text-gray-500 hover:bg-[#173c4e] mx-[3px]" />
+        class="text-gray-500 hover:bg-[#173c4e] mx-[3px]" />
       <h1>{{ team.name }}</h1>
     </div>
     <div v-else-if="!team && !isLoading" class="team-header">
-      </div>
-    <div v-else class="team-header"><h1>Cargando equipo...</h1></div>
+    </div>
+    <div v-else class="team-header">
+      <h1>Cargando equipo...</h1>
+    </div>
 
     <div class="main-layout">
       <div class="channels-sidebar">
         <h2>Canales</h2>
         <ul v-if="channels.length > 0">
-          <li
-            v-for="channel in channels"
-            :key="channel.id"
-            @click="selectChannel(channel)"
-            :class="{ 'active-channel': selectedChannel && selectedChannel.id === channel.id }"
-          >
+          <li v-for="channel in channels" :key="channel.id" @click="selectChannel(channel)"
+            :class="{ 'active-channel': selectedChannel && selectedChannel.id === channel.id }">
             # {{ channel.channel_name }}
           </li>
         </ul>
@@ -26,25 +24,26 @@
         <p v-if="isLoadingChannels">Cargando canales...</p>
 
         <div v-if="isAdmin && team" class="create-channel-section">
-          <input v-model="newChannelName" placeholder="Nombre del nuevo canal" @keyup.enter="createChannel"/>
+          <input v-model="newChannelName" placeholder="Nombre del nuevo canal" @keyup.enter="createChannel" />
           <button @click="createChannel">Crear Canal</button>
         </div>
       </div>
 
       <div class="chat-area" v-if="selectedChannel">
         <div class="chat-header">
-            <h3># {{ selectedChannel.channel_name }}</h3>
+          <h3># {{ selectedChannel.channel_name }}</h3>
         </div>
         <div class="messages-list" ref="messagesContainer">
           <div v-for="msg in messages" :key="msg.id" class="message-item">
-            <span class="message-sender">{{ msg.user.username }}:</span>
+            <Button class="message-sender" variant="link" @click="togglePopover($event, selectedChat)">{{
+              msg.user.username }}:</Button>
             <p class="message-content">{{ msg.message }}</p>
             <span class="message-time">{{ msg.time }}</span>
           </div>
-           <div v-if="messages.length === 0 && !isLoadingMessages" class="no-messages">
+          <div v-if="messages.length === 0 && !isLoadingMessages" class="no-messages">
             No hay mensajes en este canal todavía.
           </div>
-           <div v-if="isLoadingMessages" class="no-messages">Cargando mensajes...</div>
+          <div v-if="isLoadingMessages" class="no-messages">Cargando mensajes...</div>
         </div>
         <div class="message-input">
           <input v-model="newMessageText" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..." />
@@ -62,10 +61,38 @@
   <div v-else-if="isLoading && currentTeamId" class="loading-placeholder">
     <p>Cargando datos del equipo...</p>
   </div>
-  </template>
+
+  <Popover ref="op" class="w-1/5 rounded-xl m-2">
+    <div class="bg-[#1f2329] rounded-lg p-5">
+      <div class="flex gap-4 items-center mb-4">
+        <img :src="popoverUser?.avatar" class=" bg w-10 h-10 rounded-full" />
+        <div class="grid ">
+          <span class="text-white">{{ popoverUser?.name }}</span>
+          <p class="text-[#129E82]">{{ popoverUser.status || 'Desconectado' }}</p>
+        </div>
+      </div>
+      <div class="mb-4">
+        <span class="text-gray-400">sol@gmail.com</span>
+      </div>
+      <div class="flex">
+        <div class="bg-[#180e3b] flex gap-2 rounded-l-full p-1 items-center justify-center">
+          <i class="pi pi-star-fill text-yellow-300 ml-2"></i>
+          <span class="text-white mr-2">
+            Recompensas
+          </span>
+        </div>
+        <div class="bg-[#9F86F9] rounded-r-full flex items-center justify-center">
+          <span class="text-black p-2">
+            15
+          </span>
+        </div>
+      </div>
+    </div>
+  </Popover>
+</template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick, onUnmounted,defineProps } from 'vue';
+import { ref, onMounted, watch, nextTick, onUnmounted, defineProps } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import socket from '@/utils/socket'; //
 import { parseJwt } from '@/utils/jwt'; //
@@ -73,6 +100,13 @@ import axios from 'axios';
 
 const router = useRoute();
 
+const op = ref();
+const togglePopover = (event, user) => {
+  popoverUser.value = user;
+  op.value.toggle(event);
+}
+
+const selectedChat = ref(null);
 
 const team = ref(null);
 const channels = ref([]);
@@ -89,7 +123,7 @@ const isLoadingChannels = ref(false);
 const isLoadingMessages = ref(false);
 
 const API_BASE_URL = 'http://localhost:3000'; // Ensure this matches your backend URL
- const token = localStorage.getItem('user_token');// token de usuario
+const token = localStorage.getItem('user_token');// token de usuario
 
 const props = defineProps({
   currentTeamId: {
@@ -107,13 +141,13 @@ const scrollToBottom = () => {
 };
 
 const resetComponentState = () => {
-    team.value = null;
-    channels.value = [];
-    selectedChannel.value = null;
-    messages.value = [];
-    isAdmin.value = false;
-    newChannelName.value = '';
-    newMessageText.value = '';
+  team.value = null;
+  channels.value = [];
+  selectedChannel.value = null;
+  messages.value = [];
+  isAdmin.value = false;
+  newChannelName.value = '';
+  newMessageText.value = '';
 };
 
 const initializeTeamData = async (teamIdToLoad) => {
@@ -125,10 +159,10 @@ const initializeTeamData = async (teamIdToLoad) => {
 
   isLoading.value = true;
   resetComponentState(); // Limpia el estado anterior antes de cargar nuevo
-  
+
   const decoded = parseJwt(token);
   currentUser.value = decoded;
-  
+
   if (!currentUser.value) {
     console.error("Usuario no autenticado.");
     router.push('/login');
@@ -137,7 +171,7 @@ const initializeTeamData = async (teamIdToLoad) => {
   }
 
   try {
-    
+
     // 1. Fetch Detalles del Equipo
     // Asumimos que /api/my-teams devuelve los equipos del usuario y podemos filtrar.
     // Si tienes un endpoint /api/teams/:id que devuelva solo uno, sería más directo.
@@ -146,7 +180,7 @@ const initializeTeamData = async (teamIdToLoad) => {
     });
     let foundTeam = null;
     if (teamDetailsResponse.data.success) {
-        foundTeam = teamDetailsResponse.data.teams.find(t => t.id === teamIdToLoad);
+      foundTeam = teamDetailsResponse.data.teams.find(t => t.id === teamIdToLoad);
     }
 
     if (foundTeam) {
@@ -170,7 +204,7 @@ const initializeTeamData = async (teamIdToLoad) => {
       // 3. Fetch Canales
       isLoadingChannels.value = true;
       const channelsResponse = await axios.get(`${API_BASE_URL}/api/teams/${teamIdToLoad}/channels`, {
-          headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
       if (channelsResponse.data.success) {
         channels.value = channelsResponse.data.channels;
@@ -247,9 +281,9 @@ const fetchTeamMembersAndSetAdmin = async (currentTeamId) => {
     console.error("Error fetching team members:", error);
     // Fallback check if team owner
     if (team.value && currentUser.value && currentUser.value.id === team.value.owner_id) {
-        isAdmin.value = true;
+      isAdmin.value = true;
     } else {
-        isAdmin.value = false;
+      isAdmin.value = false;
     }
   }
 };
@@ -257,13 +291,13 @@ const fetchTeamMembersAndSetAdmin = async (currentTeamId) => {
 const fetchChannels = async (currentTeamId) => {
   try {
     const response = await axios.get(`${API_BASE_URL}/api/teams/${currentTeamId}/channels`, {
-        headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` }
     });
     if (response.data.success) {
       channels.value = response.data.channels;
       // Optionally auto-select the first channel if none is selected and channels exist
       if (channels.value.length > 0 && !selectedChannel.value) {
-         // selectChannel(channels.value[0]); // Decide if you want to auto-select
+        // selectChannel(channels.value[0]); // Decide if you want to auto-select
       }
     }
   } catch (error) {
@@ -279,13 +313,13 @@ const handlePreviousMessages = (loadedMessages) => {
     // El servidor ya filtra los mensajes por sala, así que si `loadedMessages[0].room` existe y coincide, es para este canal.
     // O si es un array vacío, también es para este canal (sin mensajes).
     if (loadedMessages.length > 0 && loadedMessages[0].room === selectedChannel.value.id) {
-        messages.value = loadedMessages;
+      messages.value = loadedMessages;
     } else if (loadedMessages.length === 0) { // Array vacío significa que no hay mensajes para ESTA sala
-        messages.value = [];
+      messages.value = [];
     }
     // Si loadedMessages[0].room no coincide, es un mensaje tardío de otra sala, no lo cargues.
   } else {
-      messages.value = []; // No hay canal seleccionado, no mostrar mensajes.
+    messages.value = []; // No hay canal seleccionado, no mostrar mensajes.
   }
   scrollToBottom();
 };
@@ -353,8 +387,8 @@ const sendMessage = () => {
 
 const createChannel = async () => {
   if (!newChannelName.value.trim() || !isAdmin.value || !team.value) {
-      alert("El nombre del canal no puede estar vacío, no tienes permiso o no hay un equipo cargado.");
-      return;
+    alert("El nombre del canal no puede estar vacío, no tienes permiso o no hay un equipo cargado.");
+    return;
   }
   try {
     const response = await axios.post(`${API_BASE_URL}/api/teams/${team.value.id}/channels`,
@@ -382,17 +416,21 @@ const createChannel = async () => {
 .team-view {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 60px); /* Ajusta si tienes una barra de navegación global */
+  height: calc(100vh - 60px);
+  /* Ajusta si tienes una barra de navegación global */
   color: var(--p-text-color);
   background-color: var(--p-surface-900);
 }
-.loading-placeholder, .no-team-placeholder {
+
+.loading-placeholder,
+.no-team-placeholder {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100%;
   color: var(--p-text-muted-color);
 }
+
 .team-header {
   display: flex;
   padding: 1rem .5rem;
@@ -400,9 +438,10 @@ const createChannel = async () => {
   border-bottom: 1px solid var(--p-surface-700);
   color: #8164ed;
 }
+
 .team-header h1 {
-    font-size: 1.5rem;
-    font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 600;
 }
 
 .main-layout {
@@ -420,18 +459,21 @@ const createChannel = async () => {
   display: flex;
   flex-direction: column;
 }
+
 .channels-sidebar h2 {
   margin-bottom: 1rem;
   font-size: 1.1rem;
   font-weight: 500;
   color: var(--p-text-muted-color);
 }
+
 .channels-sidebar ul {
   list-style: none;
   padding: 0;
   margin: 0;
   flex-grow: 1;
 }
+
 .channels-sidebar li {
   padding: 0.6rem 0.8rem;
   cursor: pointer;
@@ -440,26 +482,32 @@ const createChannel = async () => {
   color: var(--p-text-muted-color);
   transition: background-color 0.2s, color 0.2s;
 }
+
 .channels-sidebar li:hover {
   background-color: var(--p-content-hover-background);
   color: var(--p-text-hover-color);
 }
+
 .channels-sidebar li.active-channel {
   background-color: var(--p-primary-color);
   color: var(--p-primary-contrast-color);
   font-weight: 500;
 }
-.channels-sidebar p { /* Para mensajes de "No hay canales" */
-    color: var(--p-text-muted-color);
-    font-style: italic;
-    text-align: center;
-    margin-top: 1rem;
+
+.channels-sidebar p {
+  /* Para mensajes de "No hay canales" */
+  color: var(--p-text-muted-color);
+  font-style: italic;
+  text-align: center;
+  margin-top: 1rem;
 }
+
 .create-channel-section {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--p-surface-700);
 }
+
 .create-channel-section input {
   width: 100%;
   padding: 0.6rem 0.8rem;
@@ -470,6 +518,7 @@ const createChannel = async () => {
   border-radius: 4px;
   box-sizing: border-box;
 }
+
 .create-channel-section button {
   width: 100%;
   padding: 0.6rem 1rem;
@@ -480,6 +529,7 @@ const createChannel = async () => {
   cursor: pointer;
   font-weight: 500;
 }
+
 .create-channel-section button:hover {
   background-color: var(--p-primary-600);
 }
@@ -490,16 +540,19 @@ const createChannel = async () => {
   flex-direction: column;
   background-color: var(--p-surface-900);
 }
+
 .chat-header {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--p-surface-700);
-    background-color: var(--p-surface-800);
-    color: cornflowerblue;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--p-surface-700);
+  background-color: var(--p-surface-800);
+  color: cornflowerblue;
 }
+
 .chat-header h3 {
-    font-size: 1.25rem;
-    font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
+
 .chat-area-placeholder {
   flex-grow: 1;
   display: flex;
@@ -515,6 +568,7 @@ const createChannel = async () => {
   overflow-y: auto;
   padding: 1rem 1.5rem;
 }
+
 .message-item {
   margin-bottom: 0.75rem;
   padding: 0.6rem 0.9rem;
@@ -523,29 +577,33 @@ const createChannel = async () => {
   display: flex;
   flex-direction: column;
 }
+
 .message-sender {
   font-weight: 600;
   color: var(--p-primary-500);
   margin-bottom: 0.25rem;
   font-size: 0.9em;
 }
+
 .message-content {
-    margin: 0;
-    line-height: 1.5;
-    word-break: break-word;
-    color: aliceblue;
+  margin: 0;
+  line-height: 1.5;
+  word-break: break-word;
+  color: aliceblue;
 }
+
 .message-time {
   font-size: 0.75em;
   color: var(--p-text-muted-color);
   margin-top: 0.25rem;
   align-self: flex-end;
 }
+
 .no-messages {
-    text-align: center;
-    color: var(--p-text-muted-color);
-    margin-top: 2rem;
-    font-style: italic;
+  text-align: center;
+  color: var(--p-text-muted-color);
+  margin-top: 2rem;
+  font-style: italic;
 }
 
 .message-input {
@@ -554,6 +612,7 @@ const createChannel = async () => {
   border-top: 1px solid var(--p-surface-700);
   background-color: var(--p-surface-800);
 }
+
 .message-input input {
   flex-grow: 1;
   padding: 0.75rem;
@@ -563,6 +622,7 @@ const createChannel = async () => {
   border-radius: 4px;
   margin-right: 0.75rem;
 }
+
 .message-input button {
   padding: 0.75rem 1.5rem;
   background-color: var(--p-primary-500);
@@ -572,7 +632,8 @@ const createChannel = async () => {
   cursor: pointer;
   font-weight: 500;
 }
+
 .message-input button:hover {
-    background-color: var(--p-primary-600);
+  background-color: var(--p-primary-600);
 }
 </style>

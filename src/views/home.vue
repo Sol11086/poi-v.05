@@ -64,7 +64,7 @@ onMounted(() => {
 function logout() {
   localStorage.removeItem('user_token');
   localStorage.removeItem('username');
-  window.location.href="login";
+  window.location.href = "login";
 }
 
 const selectedUserProfile = ref(null)
@@ -93,10 +93,19 @@ function resetView() {
         <div class="flex gap-4 items-center ml-auto p-4">
           <Button icon="pi pi-gift" variant="text" rounded size="small" aria-label="Filter" class="filter-button"
             @click="toggle" />
-          <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none' }">
-            <div class="flex flex-col gap-4">
-              <span class="text-white">Recompensas</span>
-              <i class="pi pi-spin pi-star-fill text-[yellowgreen] text-sm"></i>
+          <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#010F16', border: 'none' }" class="p-5">
+            <div class="flex">
+              <div class="bg-[#180e3b] flex gap-2 rounded-l-full p-1 items-center justify-center">
+                <i class="pi pi-star-fill text-yellow-300 ml-2"></i>
+                <span class="text-white mr-2">
+                  Recompensas
+                </span>
+              </div>
+              <div class="bg-[#9F86F9] rounded-r-full flex items-center justify-center">
+                <span class="text-black p-2">
+                  15
+                </span>
+              </div>
             </div>
           </Popover>
           <InputText placeholder="Search" type="text" class="bg-[#21333D] p-2 text-white" />
