@@ -4,6 +4,15 @@ import 'primeicons/primeicons.css'
 
 const showCreateHomework = ref(false);
 
+const countries = ref([
+    { name: 'Equipo 1', code: 'AU', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { name: 'Equipo 2', code: 'BR', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { name: 'Equipo 3', code: 'CN', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { name: 'Equipo 4', code: 'EG', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+]);
+const selectedCountries = ref();
+
+const checked = ref(false);
 </script>
 
 <template>
@@ -78,15 +87,40 @@ const showCreateHomework = ref(false);
                 <label for="over_label">Titulo de la tarea</label>
             </FloatLabel>
             <FloatLabel>
-                <Textarea id="over_label" v-model="value1" class="bg-[#081e29] p-1 text-white w-full" rows="5" cols="30" style="resize: none" />
+                <Textarea id="over_label" v-model="value1" class="bg-[#081e29] p-1 text-white w-full" rows="5" cols="30"
+                    style="resize: none" />
                 <label for="over_label">Descripción</label>
             </FloatLabel>
-            <div class="gap-4 flex justify-between">
-                <Button label="Crear nueva tarea" size="small" @click="showCreateHomework = true" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
-                rounded-full hover:bg-[#9F86F9] hover:text-white" />
-                <Button label="Cancelar" size="small" @click="showCreateHomework = true" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2 
-                rounded-full hover:bg-[#C13030] hover:text-white" />
+            <FloatLabel class="w-full">
+                <MultiSelect v-model="selectedCountries" :options="countries" optionLabel="name" display="chip"
+                    class="bg-[#081e29] p-2 text-white w-full"
+                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]">
+                    <template #option="slotProps">
+                        <div class="flex items-center h-1/6 p-2 text-gray-300">
+                            <img :alt="slotProps.option.name"
+                                src="https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg"
+                                :class="`flag flag-${slotProps.option.code.toLowerCase()} mr-2 h-5 `" />
+                            <div>{{ slotProps.option.name }}</div>
+                        </div>
+                    </template>
+                    <template #dropdownicon>
+                        <i class="pi pi-users" />
+                    </template>
+                </MultiSelect>
+                <label for="over_label">Asignar a equipos</label>
+            </FloatLabel>
+            <div class="flex flex-row items-center gap-8">
+                <div class="flex items-center gap-2">
+                    <Checkbox v-model="checked" inputId="hw-rewards" name="hw-rewards" value="reward-active" />
+                    <label for="hw-rewards" class="text-gray-300">Crear tarea con recompensa</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <Checkbox v-model="checked" inputId="email-advice" name="email-advice" value="email-active" />
+                    <label for="email-advice" class="text-gray-300">Enviar aviso por email</label>
+                </div>
             </div>
+            <Button label="Crear tarea" size="small" @click="CreateHomework()" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+        rounded-full hover:bg-[#9F86F9] hover:text-white" />
         </div>
 
     </Dialog>
