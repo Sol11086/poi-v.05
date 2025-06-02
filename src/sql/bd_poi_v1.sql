@@ -69,13 +69,29 @@ CREATE TABLE messages (
 -- Tabla de Tareas dentro de Equipos
 CREATE TABLE tasks (
     id VARCHAR(15) PRIMARY KEY,
-    team_id VARCHAR(15) NOT NULL,
-    assigned_to VARCHAR(10) NOT NULL,
-    descrip TEXT NOT NULL,
-    stat ENUM('pending', 'completed') DEFAULT 'pending',
+    title VARCHAR(255) NOT NULL,                     
+    description TEXT,                                 
+    team_id VARCHAR(15) NOT NULL,                     
+    creator_id VARCHAR(10) NOT NULL,                  
+    due_date TIMESTAMP NULL,                         
+    has_reward BOOLEAN DEFAULT FALSE,                 
+    notify_by_email BOOLEAN DEFAULT FALSE,            
+    status ENUM('pending', 'in_progress', 'completed', 'overdue') DEFAULT 'pending', -- Task status
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
-    FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+); 
+
+-- Tabla para saber quién subió tarea
+CREATE TABLE task_submissions (
+    id VARCHAR(15) PRIMARY KEY,
+    task_id VARCHAR(15) NOT NULL,
+    user_id VARCHAR(10) NOT NULL,                     -- Usuario que completó la tarea
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,                                       
+    UNIQUE (task_id, user_id),                        -- Asegurarse que el usuario sólo puedar subirlo 1 vez
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Tabla de Archivos Multimedia

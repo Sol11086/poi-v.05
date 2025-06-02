@@ -168,6 +168,7 @@ app.post('/api/teams', async (req, res) => { // O router.post('/', ...
 
 app.get('/api/my-teams', authenticateToken, async (req, res) => {
     const userId = req.user.id; // Extracted from JWT by authenticateToken middleware
+    console.log('GET /api/my-teams - User ID from token:', userId);
 
     if (!userId) {
         return res.status(400).json({ success: false, error: "User ID not found in token." });
@@ -314,6 +315,184 @@ app.get('/api/teams/:teamId/members', authenticateToken, (req, res) => {
     });
 });
 
+// --- TASK ROUTES ---
+
+// POST /api/tasks - Create a new task
+app.post('/api/tasks', authenticateToken, async (req, res) => {
+    const { title, description, team_id, due_date, has_reward, notify_by_email } = req.body;
+    const creator_id = req.user.id; // From JWT
+
+    if (!title || !team_id) {
+        return res.status(400).json({ success: false, error: "Title and team ID are required." });
+    }
+
+    const taskId = generateVARCHAR15ID();
+    const taskQuery = `
+        INSERT INTO tasks (id, title, description, team_id, creator_id, due_date, has_reward, notify_by_email, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+    `;
+    const values = [taskId, title, description, team_id, creator_id, due_date || null, has_reward || false, notify_by_email || false];
+
+    connection.query(taskQuery, values, (err, result) => {
+        if (err) {
+            console.error("Error creating task:", err);
+            return res.status(500).json({ success: false, error: "Failed to create task." });
+        }
+
+        // TODO: If notify_by_email is true, implement email sending logic here.
+        // This would involve fetching team members' emails and using an email library.
+        // Example:
+        // if (notify_by_email) {
+        //   sendTaskNotificationEmail(team_id, { id: taskId, title, team_name: 'Team Name from DB' });
+        // }
+
+        res.status(201).json({ success: true, message: "Task created successfully.", task_id: taskId, task: { id: taskId, title, team_id, creator_id, due_date, has_reward, status: 'pending' } });
+    });
+});
+
+// GET /api/teams/:teamId/tasks - Get all tasks for a specific team
+app.get('/api/teams/:teamId/tasks', authenticateToken, async (req, res) => {
+    const { teamId } = req.params;
+    const currentUserId = req.user.id;
+
+    // Optional: Check if user is a member of the team teamId
+    // const memberCheckQuery = 'SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?';
+    // connection.query(memberCheckQuery, [teamId, currentUserId], (memberErr, memberResults) => { ... });
+
+    const tasksQuery = `
+        SELECT t.*, u.username as creator_username,
+               (SELECT COUNT(*) FROM task_submissions ts WHERE ts.task_id = t.id AND ts.user_id = ?) > 0 as completed_by_current_user
+        FROM tasks t
+        JOIN users u ON t.creator_id = u.id
+        WHERE t.team_id = ?
+        ORDER BY t.created_at DESC
+    `;
+    connection.query(tasksQuery, [currentUserId, teamId], (err, results) => {
+        if (err) {
+            console.error("Error fetching tasks for team:", err);
+            return res.status(500).json({ success: false, error: "Error fetching tasks." });
+        }
+        const tasksWithCompletion = results.map(task => ({
+            ...task,
+            is_creator: task.creator_id === currentUserId,
+            completed_by_current_user: !!task.completed_by_current_user // Convert to boolean
+        }));
+        res.status(200).json({ success: true, tasks: tasksWithCompletion });
+    });
+});
+
+// DELETE /api/tasks/:taskId - Delete a task (only by creator)
+app.delete('/api/tasks/:taskId', authenticateToken, async (req, res) => {
+    const { taskId } = req.params;
+    const userId = req.user.id;
+
+    // First, verify if the user is the creator of the task
+    connection.query('SELECT creator_id FROM tasks WHERE id = ?', [taskId], (findErr, findResults) => {
+        if (findErr) {
+            console.error("Error finding task for deletion:", findErr);
+            return res.status(500).json({ success: false, error: "Error checking task ownership." });
+        }
+        if (findResults.length === 0) {
+            return res.status(404).json({ success: false, error: "Task not found." });
+        }
+        if (findResults[0].creator_id !== userId) {
+            return res.status(403).json({ success: false, error: "You are not authorized to delete this task." });
+        }
+
+        // Proceed with deletion (task_submissions will be deleted by CASCADE)
+        connection.query('DELETE FROM tasks WHERE id = ?', [taskId], (deleteErr, deleteResult) => {
+            if (deleteErr) {
+                console.error("Error deleting task:", deleteErr);
+                return res.status(500).json({ success: false, error: "Failed to delete task." });
+            }
+            if (deleteResult.affectedRows === 0) {
+                 return res.status(404).json({ success: false, error: "Task not found or already deleted." });
+            }
+            res.status(200).json({ success: true, message: "Task deleted successfully." });
+        });
+    });
+});
+
+// POST /api/tasks/:taskId/submit - Submit/complete a task
+app.post('/api/tasks/:taskId/submit', authenticateToken, async (req, res) => {
+    const { taskId } = req.params;
+    const userId = req.user.id;
+    const { notes } = req.body; // Optional notes
+
+    // Optional: Verify user is part of the team to which the task is assigned
+    // ... (query to check team_members based on taskId -> tasks.team_id)
+
+    const submissionId = generateVARCHAR15ID();
+    const submissionQuery = `
+        INSERT INTO task_submissions (id, task_id, user_id, notes, submitted_at)
+        VALUES (?, ?, ?, ?, NOW())
+    `;
+    connection.query(submissionQuery, [submissionId, taskId, userId, notes], (err, result) => {
+        if (err) {
+            if (err.code === 'ER_DUP_ENTRY') { // Unique constraint (task_id, user_id)
+                return res.status(409).json({ success: false, error: "Task already submitted by this user." });
+            }
+            console.error("Error submitting task:", err);
+            return res.status(500).json({ success: false, error: "Failed to submit task." });
+        }
+        res.status(201).json({ success: true, message: "Task submitted successfully.", submission_id: submissionId });
+    });
+});
+
+// GET /api/tasks/:taskId/submissions - Get users who have submitted a task (for creator)
+app.get('/api/tasks/:taskId/submissions', authenticateToken, async (req, res) => {
+    const { taskId } = req.params;
+    const currentUserId = req.user.id;
+
+    // Verify current user is the task creator
+    connection.query('SELECT creator_id FROM tasks WHERE id = ?', [taskId], (taskErr, taskResults) => {
+        if (taskErr) return res.status(500).json({ success: false, error: "Error verifying task."});
+        if (taskResults.length === 0) return res.status(404).json({ success: false, error: "Task not found."});
+        if (taskResults[0].creator_id !== currentUserId) {
+            return res.status(403).json({ success: false, error: "You are not authorized to view submissions for this task."});
+        }
+
+        const submissionsQuery = `
+            SELECT ts.user_id, u.username, ts.submitted_at, ts.notes
+            FROM task_submissions ts
+            JOIN users u ON ts.user_id = u.id
+            WHERE ts.task_id = ?
+            ORDER BY ts.submitted_at DESC
+        `;
+        connection.query(submissionsQuery, [taskId], (err, results) => {
+            if (err) {
+                console.error("Error fetching task submissions:", err);
+                return res.status(500).json({ success: false, error: "Error fetching submissions." });
+            }
+            res.status(200).json({ success: true, submissions: results });
+        });
+    });
+});
+
+// You'll also need an endpoint to fetch teams the user is part of, to populate the dropdown in the task creation dialog.
+// The existing GET /api/my-teams might be suitable if it returns teams where the user can assign tasks (e.g., owner or admin).
+// If not, you might need a new one like GET /api/manageable-teams
+app.get('/api/manageable-teams', authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    console.log('GET /api/manageable-teams - User ID from token:', userId);
+    // Query teams where user is owner OR admin in team_members
+    const query = `
+        SELECT t.id, t.team_name
+        FROM teams t
+        LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.user_id = ?
+        WHERE t.owner_id = ? OR tm.role = 'admin'
+        GROUP BY t.id, t.team_name
+        ORDER BY t.team_name ASC
+    `;
+    connection.query(query, [userId, userId], (err, results) => {
+        if (err) {
+            console.error("Error fetching manageable teams:", err);
+            return res.status(500).json({ success: false, error: "Error fetching teams." });
+        }
+        res.status(200).json({ success: true, teams: results });
+    });
+});
+
 // connection.end(); // Cerrar la conexión a la base de datos al finalizar
 //----------- FIN DE LA CONFIGURACION DE LA BASE DE DATOS ----------
 // NEW: Handler to get or create a team channel
@@ -332,7 +511,7 @@ async function ManejarTeamChannel_Promise({ team_id, channel_name }) {
             if (results.length > 0) {
                 resolve({ success: true, channel_id: results[0].id, created: false });
             } else {
-                const newChannelId = generateMessageID();// generar 15 caracteres hexadecimales
+                const newChannelId = generateVARCHAR15ID();// generar 15 caracteres hexadecimales
                 const insertQuery = 'INSERT INTO team_channels (id, team_id, channel_name) VALUES (?, ?, ?)';
                 connection.query(insertQuery, [newChannelId, team_id, channel_name], (insertErr) => {
                     if (insertErr) {
@@ -377,7 +556,7 @@ function ManejarPrivateChannel_Promise({ user1_id, user2_id }) { // Renombrada p
                 // Usamos resolve para el resultado exitoso
                 resolve({ success: true, chat_id: results[0].id, created: false });
             } else {
-                const newChatId = generateMessageID();
+                const newChatId = generateVARCHAR15ID();
                 const insertQuery = 'INSERT INTO private_chats (id, user1_id, user2_id) VALUES (?, ?, ?)';
                 connection.query(insertQuery, [newChatId, u1, u2], (insertErr) => {
                     if (insertErr) {
@@ -409,9 +588,11 @@ function generateTeamID() {
     return crypto.randomBytes(7).toString('hex'); // 14 caracteres
 }
 
-function generateMessageID() {
+function generateVARCHAR15ID() {
     return crypto.randomBytes(7).toString('hex').substring(0, 15); // 15 caracteres hexadecimales
 }
+
+
 
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
@@ -427,7 +608,7 @@ io.on("connection", (socket) => {
             return socket.emit('messageError', { message: 'Faltan datos esenciales para el mensaje.' });
         }
 
-        const messageId = generateMessageID(); // O tu generateMessageID
+        const messageId = generateVARCHAR15ID(); // O tu generateVARCHAR15ID
         const createdAt = new Date();
         let chatIdValue = null;
         let teamChannelIdValue = null;

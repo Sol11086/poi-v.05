@@ -24,6 +24,15 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     cors: true,
+    proxy: {
+      '/api': { // Cualquier petición que comience con /api
+        target: 'http://localhost:3000', // Dirígela a tu servidor Express
+        changeOrigin: true, // Necesario para virtual hosted sites
+        secure: false, // Si tu backend no usa HTTPS en desarrollo
+        // Puedes añadir rewrite si necesitas quitar /api del path antes de enviarlo al backend
+        // rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    },
     //-- ARCHIVOS DONDE SE DEBAN CAMBIAR --
     // * login.vue
     // * teams.vue
