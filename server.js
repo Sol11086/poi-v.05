@@ -155,7 +155,7 @@ io.on("connection", (socket) => {
     });
 
     // Opcional: notificar que un usuario está listo para llamar
-    socket.on("ready-for-call", ({ room }) => {
+    /*socket.on("ready-for-call", ({ room }) => {
         socket.to(room).emit("user-ready", { id: socket.id });
     });
 
@@ -174,7 +174,7 @@ io.on("connection", (socket) => {
     // Opcional: notificar que un usuario está listo para llamar
     socket.on("ready-for-call", ({ room }) => {
         socket.to(room).emit("user-ready", { id: socket.id });
-    });
+    });*/
 });
 
 
