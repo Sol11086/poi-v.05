@@ -30,18 +30,19 @@ export default defineConfig({
         changeOrigin: true, // Necesario para virtual hosted sites
         secure: false, // Si tu backend no usa HTTPS en desarrollo
         // Puedes añadir rewrite si necesitas quitar /api del path antes de enviarlo al backend
-        // rewrite: (path) => path.replace(/^\/api/, '')
+        rewrite: (path) => path.replace(/^\/api/, '')
       }
     },
     //-- ARCHIVOS DONDE SE DEBAN CAMBIAR --
     // * login.vue
     // * teams.vue
-    // *
-    //  
+    // * GeneralTeams.vue
+    // * homeworks.vue
+    // * socket.js
     
     // ESTA ES LA CLAVE: permitir el host de ngrok explícitamente
     allowedHosts: [
-      '02e2-2806-230-4043-c126-650e-8e58-cb04-5c6b.ngrok-free.app'// Cambiar por el host de ngrok se esté usando
+      '4196-2806-230-4043-c126-1da5-c2d8-792a-508d.ngrok-free.app'// Cambiar por el host de ngrok se esté usando
     ],
   },
 })

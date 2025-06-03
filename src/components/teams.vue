@@ -6,11 +6,15 @@ import socket from "@/utils/socket.js";
 import axios from 'axios';
 import { parseJwt } from '@/utils/jwt.js';
 import { InputText } from "primevue";
-
-
 import { content, header } from "@primeuix/themes/aura/accordion";
 import GeneralTeams from "./GeneralTeams.vue";
 
+const apiClient = axios.create({
+    baseURL: 'https://http://localhost:3000', // Asegúrate que esta sea tu URL de ngrok
+    headers: {
+        'ngrok-skip-browser-warning': 'true' // O cualquier valor, comúnmente se usa '69420'
+    }
+});
 
 onMounted(() => {
     equipos.value = [
@@ -46,38 +50,41 @@ const audioOn = ref(false);
 const API_BASE_URL = 'http://localhost:3000';
 
 const fetchEquipos = async () => {
-  const token = localStorage.getItem('user_token');
-  if (!token) {
-    // Manejar no autenticado
-    return;
-  }
-  // const currentUser = parseJwt(token); // No es necesario aquí si el backend ya filtra por usuario
-
-  try {
-    const response = await axios.get(`${API_BASE_URL}/api/my-teams`, { //
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (response.data.success) {
-      equipos.value = response.data.teams;
+    const token = localStorage.getItem('user_token');
+    if (!token) {
+        // Manejar no autenticado
+        return;
     }
-  } catch (error) {
-    console.error("Error al cargar equipos:", error);
-  }
+    // const currentUser = parseJwt(token); // No es necesario aquí si el backend ya filtra por usuario
+
+    try {
+        const response = await axios.get(`${API_BASE_URL}/api/my-teams`, { //
+            headers: {
+                 Authorization: `Bearer ${token}`,
+                 'ngrok-skip-browser-warning': 'true'
+                }
+        });
+        if (response.data.success) {
+            equipos.value = response.data.teams;
+        }
+    } catch (error) {
+        console.error("Error al cargar equipos:", error);
+    }
 };
 
 
 const selectTeam = (teamId) => {
-  if (generalId.value === teamId) {
-    // Opcional: Deseleccionar si se hace clic de nuevo en el mismo equipo
-    // selectedTeamId.value = null;
-  } else {
-    generalId.value = teamId;
-  }
-  console.log("Equipo seleccionado ID:", generalId.value);
+    if (generalId.value === teamId) {
+        // Opcional: Deseleccionar si se hace clic de nuevo en el mismo equipo
+        // selectedTeamId.value = null;
+    } else {
+        generalId.value = teamId;
+    }
+    console.log("Equipo seleccionado ID:", generalId.value);
 };
 
 onMounted(() => {
-  fetchEquipos();
+    fetchEquipos();
 });
 
 import { jwtDecode } from 'jwt-decode';
@@ -204,10 +211,11 @@ const handleCreateTeam = async () => { // Convertir a async
 
     try {
         // Asegúrate que la URL base (ej: http://localhost:3000) sea correcta
-        const response = await axios.post('http://localhost:3000/api/teams', teamData, {
+        const response = await axios.post(API_BASE_URL+'/api/teams', teamData, {
             headers: {
                 // Si necesitas enviar el token JWT para autenticación en el endpoint HTTP
                 // 'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'ngrok-skip-browser-warning': 'true'
             }
         });
 
@@ -267,9 +275,10 @@ onMounted(async () => {
             return;
         }
 
-        const response = await axios.get('http://localhost:3000/api/my-teams', { // Ensure the URL is correct
+        const response = await axios.get(API_BASE_URL+'/api/my-teams', { // Ensure the URL is correct
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'ngrok-skip-browser-warning': 'true'
             }
         });
         console.log(response);

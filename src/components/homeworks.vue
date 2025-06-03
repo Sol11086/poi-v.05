@@ -290,6 +290,8 @@ const taskDialogVisible = ref(false);
 const submissionsDialogVisible = ref(false);
 const submitTaskDialogVisible = ref(false);
 
+const API_BASE_URL = 'http://localhost:3000'; // deafult http://localhost:3000
+
 // ==============================================
 const props = defineProps({
     currentTask: Object, // La tarea actual para la que se está haciendo la entrega
@@ -351,8 +353,8 @@ const executeSubmitTask = async () => {
   };
 
   try {
-    const response = await axios.post(`/api/tasks/${taskToSubmitForDialog.value.task.id}/submit`, payload, {
-      headers: { Authorization: `Bearer ${token}` }
+    const response = await axios.post(`${API_BASE_URL}/api/tasks/${taskToSubmitForDialog.value.task.id}/submit`, payload, {
+      headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
     });
 
     if (response.data.success) {
@@ -415,10 +417,10 @@ const getToken = () => {
 const fetchManageableTeams = async () => {
     try {
         const token = getToken();
-        const response = await axios.get('/api/manageable-teams', {
-            headers: { Authorization: `Bearer ${token}` }
+        const response = await axios.get(API_BASE_URL + '/api/manageable-teams', {
+            headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' }
         });
-        console.log('Response from /api/manageable-teams:', response.data); // <--- AÑADE ESTO
+        console.log('Response from /api/manageable-teams:', response.data); 
         if (response.data.success) {
             manageableTeams.value = response.data.teams;
             console.log('Manageable Teams set:', manageableTeams.value);
@@ -432,8 +434,8 @@ const fetchManageableTeams = async () => {
 const fetchAllUserTeams = async () => {
     try {
         const token = getToken();
-        const response = await axios.get('/api/my-teams', {
-            headers: { Authorization: `Bearer ${token}` }
+        const response = await axios.get(API_BASE_URL + '/api/my-teams', {
+            headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
         });
         console.log('Response from /api/my-teams:', response.data);
         if (response.data.success) {
@@ -467,8 +469,8 @@ const fetchTasksForTeam = async (teamId) => {
             // return;
         }
 
-        const response = await axios.get(`/api/teams/${teamId}/tasks`, {
-            headers: { Authorization: `Bearer ${token}` }
+        const response = await axios.get(`${API_BASE_URL}/api/teams/${teamId}/tasks`, {
+            headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
         });
         if (response.data.success) {
             // El backend ya añade is_creator y completed_by_current_user
@@ -533,8 +535,8 @@ const saveTask = async () => {
 
         console.log("Enviando tarea:", effectivePayload);
 
-        const response = await axios.post('/api/tasks', effectivePayload, {
-            headers: { Authorization: `Bearer ${token}` }
+        const response = await axios.post(API_BASE_URL + '/api/tasks', effectivePayload, {
+            headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
         });
 
         if (response.data.success) {
@@ -570,8 +572,8 @@ const confirmDeleteTask = (taskToDelete) => {
 const deleteTask = async (taskToDelete) => {
     try {
         const token = getToken();
-        await axios.delete(`/api/tasks/${taskToDelete.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
+        await axios.delete(`${API_BASE_URL}/api/tasks/${taskToDelete.id}`, {
+            headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true'}
         });
         // toast.add({ severity: 'success', summary: 'Éxito', detail: 'Tarea eliminada.', life: 3000 });
         console.log('Tarea eliminada');
@@ -618,8 +620,8 @@ const deleteTask = async (taskToDelete) => {
 const viewSubmissions = async (taskToView) => {
     try {
         const token = getToken();
-        const response = await axios.get(`/api/tasks/${taskToView.id}/submissions`, {
-            headers: { Authorization: `Bearer ${token}` }
+        const response = await axios.get(`${API_BASE_URL}/api/tasks/${taskToView.id}/submissions`, {
+            headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
         });
         if (response.data.success) {
             currentTaskSubmissions.value = response.data.submissions;
