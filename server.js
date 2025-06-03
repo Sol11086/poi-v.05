@@ -27,7 +27,7 @@ const app = express();
 const allowedOrigins = [
     'https://de8a-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app', // TU FRONTEND NGROK URL
     'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app', // TU BACKEND NGROK URL
-    'http://localhost:5173' // Para desarrollo local
+    'http://localhost:5173' // Para desarrollo œlocal
 ];
 
 const corsOptions = {

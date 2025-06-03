@@ -215,6 +215,8 @@
     :closable="false"
     :style="{ width: '90vw', maxWidth: '800px' }"
     :header="callStatus"
+    @show="isCallDialogMounted = true"
+    @hide="isCallDialogMounted = false"
   >
     <div class="grid grid-cols-2 gap-4">
       <div class="relative">
@@ -224,6 +226,8 @@
           muted 
           playsinline
           class="w-full rounded-lg bg-black"
+          style="transform: scaleX(-1);"
+          @loadedmetadata="handleLocalVideoLoaded"
         ></video>
         <div class="absolute bottom-2 left-2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
           You
@@ -235,6 +239,7 @@
           autoplay 
           playsinline
           class="w-full rounded-lg bg-black"
+          @loadedmetadata="handleRemoteVideoLoaded"
         ></video>
         <div class="absolute bottom-2 left-2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
           {{ isCallIncoming ? currentCall?.name : selectedChat?.name }}
@@ -543,6 +548,16 @@ onUnmounted(() => {
   
   // Clean up any active call
   endCall();
+
+  // Clean up any active streams
+  if (localStream.value) {
+    localStream.value.getTracks().forEach(track => track.stop());
+    localStream.value = null;
+  }
+  if (remoteStream.value) {
+    remoteStream.value.getTracks().forEach(track => track.stop());
+    remoteStream.value = null;
+  }
 });
 
 
@@ -719,6 +734,45 @@ const peer = ref(null);
 const myPeerId = ref(null);
 const call = ref(null);
 
+// Add new refs for video loading states
+const isLocalVideoReady = ref(false);
+const isRemoteVideoReady = ref(false);
+
+// Add a new ref to track if the dialog is mounted
+const isCallDialogMounted = ref(false);
+
+// Add video event handlers
+const handleLocalVideoLoaded = () => {
+    console.log('Local video metadata loaded');
+    isLocalVideoReady.value = true;
+    if (localVideoRef.value) {
+        console.log('Attempting to play local video');
+        localVideoRef.value.play()
+            .then(() => {
+                console.log('Local video playing successfully');
+            })
+            .catch(e => {
+                if (e.name !== 'AbortError') {
+                    console.error('Error playing local video:', e);
+                }
+            });
+    } else {
+        console.error('Local video ref is not available');
+    }
+};
+
+const handleRemoteVideoLoaded = () => {
+    isRemoteVideoReady.value = true;
+    if (remoteVideoRef.value) {
+        remoteVideoRef.value.play()
+            .catch(e => {
+                if (e.name !== 'AbortError') {
+                    console.error('Error playing remote video:', e);
+                }
+            });
+    }
+};
+
 // Initialize PeerJS
 const initializePeer = () => {
     // Use the current user's ID as the peer ID for consistent connections
@@ -787,17 +841,29 @@ const initializePeer = () => {
     // Handle incoming calls
     peer.value.on('call', async (incomingCall) => {
         try {
+            console.log('Incoming call received');
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: true, 
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                }, 
                 audio: true 
             });
+            
+            console.log('Got local stream for incoming call:', stream.getTracks().map(t => t.kind));
             
             if (!peer.value || peer.value.destroyed) {
                 throw new Error('Peer connection lost');
             }
 
+            // Store the stream reference
+            localStream.value = stream;
+
             if (localVideoRef.value) {
+                console.log('Setting local stream to video element for incoming call');
                 localVideoRef.value.srcObject = stream;
+                localVideoRef.value.load();
             }
 
             // Store the call reference
@@ -843,18 +909,85 @@ const initializePeer = () => {
     });
 };
 
-// Modify startCall to use the recipient's ID
+// Modify startCall to wait for dialog mounting
 const startCall = async () => {
     if (!selectedChat.value.recipientId || !peer.value) return;
     
     try {
+        console.log('Starting call...');
+        // Reset video states
+        isLocalVideoReady.value = false;
+        isRemoteVideoReady.value = false;
+        
+        // Show dialog first
+        callDialogVisible.value = true;
+        
+        // Wait for dialog to be mounted
+        await new Promise(resolve => {
+            if (isCallDialogMounted.value) {
+                resolve();
+            } else {
+                const checkMounted = setInterval(() => {
+                    if (isCallDialogMounted.value) {
+                        clearInterval(checkMounted);
+                        resolve();
+                    }
+                }, 100);
+            }
+        });
+        
+        console.log('Call dialog mounted, proceeding with call setup');
+        
+        // Stop any existing local stream
+        if (localStream.value) {
+            console.log('Stopping existing local stream');
+            localStream.value.getTracks().forEach(track => {
+                track.stop();
+                console.log('Stopped track:', track.kind);
+            });
+            localStream.value = null;
+        }
+
+        // Get new local stream with specific constraints
+        console.log('Requesting media devices...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, 
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: 'user'
+            }, 
             audio: true 
         });
         
+        console.log('Got local stream:', stream.getTracks().map(t => t.kind));
+        
+        // Store the stream reference
+        localStream.value = stream;
+        
+        // Wait for next tick to ensure video element is available
+        await nextTick();
+        
+        // Set the stream to the video element
         if (localVideoRef.value) {
+            console.log('Setting local stream to video element');
             localVideoRef.value.srcObject = stream;
+            localVideoRef.value.load();
+            
+            // Add event listeners for debugging
+            localVideoRef.value.onloadeddata = () => {
+                console.log('Local video data loaded');
+            };
+            
+            localVideoRef.value.oncanplay = () => {
+                console.log('Local video can play');
+            };
+            
+            localVideoRef.value.onerror = (e) => {
+                console.error('Local video error:', e);
+            };
+        } else {
+            console.error('Local video ref is still not available after dialog mount');
+            throw new Error('Video element not available');
         }
 
         // Generate a call ID
@@ -870,6 +1003,9 @@ const startCall = async () => {
 
         // Handle the remote stream
         call.value.on('stream', (remoteStream) => {
+            if (!peer.value || peer.value.destroyed) {
+                throw new Error('Peer connection lost');
+            }
             remoteStream.value = remoteStream;
             if (remoteVideoRef.value) {
                 remoteVideoRef.value.srcObject = remoteStream;
@@ -898,13 +1034,39 @@ const startCall = async () => {
     } catch (error) {
         console.error('Error starting call:', error);
         alert('Error accessing camera/microphone or connecting to peer. Please check permissions and try again.');
+        // Clean up any partial setup
+        if (localStream.value) {
+            localStream.value.getTracks().forEach(track => track.stop());
+            localStream.value = null;
+        }
+        isLocalVideoReady.value = false;
+        isRemoteVideoReady.value = false;
     }
 };
 
+// Update handleIncomingCall to wait for dialog mounting
 const handleIncomingCall = async (data) => {
     isCallIncoming.value = true;
     currentCall.value = data;
+    
+    // Show dialog first
     callDialogVisible.value = true;
+    
+    // Wait for dialog to be mounted
+    await new Promise(resolve => {
+        if (isCallDialogMounted.value) {
+            resolve();
+        } else {
+            const checkMounted = setInterval(() => {
+                if (isCallDialogMounted.value) {
+                    clearInterval(checkMounted);
+                    resolve();
+                }
+            }, 100);
+        }
+    });
+    
+    console.log('Call dialog mounted for incoming call');
     callStatus.value = 'Incoming call...';
 };
 
@@ -933,15 +1095,30 @@ const endCall = () => {
         call.value = null;
     }
     
+    // Clean up local stream
     if (localStream.value) {
         localStream.value.getTracks().forEach(track => track.stop());
         localStream.value = null;
     }
     
+    // Clean up remote stream
     if (remoteStream.value) {
         remoteStream.value.getTracks().forEach(track => track.stop());
         remoteStream.value = null;
     }
+
+    // Clear video elements
+    if (localVideoRef.value) {
+        localVideoRef.value.srcObject = null;
+    }
+    if (remoteVideoRef.value) {
+        remoteVideoRef.value.srcObject = null;
+    }
+
+    // Reset video states
+    isLocalVideoReady.value = false;
+    isRemoteVideoReady.value = false;
+    isCallDialogMounted.value = false;
 
     if (currentCall.value) {
         socket.emit('end-call', {
