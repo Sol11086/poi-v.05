@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "migrate": "pg-migrate up",
+    "migrate:down": "pg-migrate down",
+    "migrate:create": "pg-migrate create"
   },
   "dependencies": {
     "@cloudinary/url-gen": "^1.21.0",
@@ -26,6 +29,9 @@
     "jwt-decode": "^4.0.0",
     "mysql": "^2.18.1",
     "nodemon": "^3.1.9",
+    "peerjs": "^1.5.4",
+    "pg": "^8.16.0",
+    "pg-migrate": "^2.0.1",
     "primeicons": "^7.0.0",
     "primevue": "^4.2.5",
     "socket.io": "^4.8.1",
