@@ -9,6 +9,7 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     avatar VARCHAR(255),
+    reward_points INT DEFAULT 0,
     status ENUM('online', 'offline', 'busy') DEFAULT 'offline',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -19,6 +20,7 @@ CREATE TABLE teams (
     team_name VARCHAR(100) NOT NULL,
     owner_id VARCHAR(10) NOT NULL,
     image VARCHAR(255),
+    caption TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -68,14 +70,18 @@ CREATE TABLE messages (
 -- Tabla de Tareas dentro de Equipos
 CREATE TABLE tasks (
     id VARCHAR(15) PRIMARY KEY,
-    team_id VARCHAR(15) NOT NULL,
-    assigned_to VARCHAR(10) NOT NULL,
-    descrip TEXT NOT NULL,
-    stat ENUM('pending', 'completed') DEFAULT 'pending',
+    title VARCHAR(255) NOT NULL,                     
+    description TEXT,                                 
+    team_id VARCHAR(15) NOT NULL,                     
+    creator_id VARCHAR(10) NOT NULL,                  
+    due_date TIMESTAMP NULL,                         
+    has_reward BOOLEAN DEFAULT FALSE,                 
+    notify_by_email BOOLEAN DEFAULT FALSE,            
+    status ENUM('pending', 'in_progress', 'completed', 'overdue') DEFAULT 'pending', -- Task status
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
-    FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE CASCADE
-);
+    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+); 
 
 -- Tabla de Archivos Multimedia
 CREATE TABLE multimedia (
@@ -84,10 +90,28 @@ CREATE TABLE multimedia (
     task_id VARCHAR(15),
     file_path VARCHAR(255) NOT NULL,
     file_type VARCHAR(50),
+    original_filename VARCHAR(255) NULL,
+    bytes INT NULL,
+    public_id VARCHAR(255) NULL,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
+
+-- Tabla para saber quién subió tarea
+CREATE TABLE task_submissions (
+    id VARCHAR(15) PRIMARY KEY,
+    task_id VARCHAR(15) NOT NULL,
+    user_id VARCHAR(10) NOT NULL,                     -- Usuario que completó la tarea
+    multimedia_id VARCHAR(15) NULL,
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,                                       
+    UNIQUE (task_id, user_id),                        -- Asegurarse que el usuario sólo puedar subirlo 1 vez
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (multimedia_id) REFERENCES multimedia(id) ON DELETE SET NULL
+);
+
 
 -- Tabla de Mensajes Fijados
 CREATE TABLE pinned_teams (
@@ -102,8 +126,8 @@ CREATE TABLE pinned_teams (
 CREATE TABLE video_calls (
     id VARCHAR(15) PRIMARY KEY,
     caller_id VARCHAR(10) NOT NULL,
-    receiver_id VARCHAR(10),
-    team_id VARCHAR(15),
+    receiver_id VARCHAR(10), -- Null en llamadas grupales
+    team_id VARCHAR(15), -- NULL si la llamada es 1 a 1
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ended_at TIMESTAMP NULL,
     status ENUM('active', 'ended', 'missed') NOT NULL DEFAULT 'active',
@@ -123,12 +147,15 @@ CREATE TABLE video_call_participants (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Tabla de Recompensas
-CREATE TABLE rewards (
-    id VARCHAR(15) PRIMARY KEY,
-    user_id VARCHAR(10) NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    descrip TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-); 
+
+-- SELECT * FROM private_chats
+-- SELECT * FROM messages
+-- ALTER TABLE users CHANGE COLUMN password_hash password VARCHAR(255) NOT NULL;
+-- INSERT INTO users (id, username, email, password, avatar, status);
+-- 
+-- INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES ('8867566ed6ec51', 'VeckThor15', NULL, 3, 'ola grupo', '2025-05-20 06:11:03.211')
+
+-- CONSULTAS
+INSERT INTO users (id, username, email, password, avatar) VALUES ('VeckThor15', 'Veck MR', 'victormolru15@gmail.com', 'password123', 'default_avatar.png');
+INSERT INTO users (id, username, email, password, avatar) VALUES ('JellyFish8', 'Jelly', 'jelly@gmail.com', 'password123', 'default_avatar.png');
+INSERT INTO users (id, username, email, password, avatar) VALUES ('SolEcito16', 'Sol', 'sol@gmail.com', 'password123', 'default_avatar.png');

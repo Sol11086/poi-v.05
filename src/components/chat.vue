@@ -98,27 +98,38 @@
 
     <div class="chat-area flex-1 flex flex-col bg-gray-700">
       <div v-if="selectedChat.id || (selectedChat.roomType === 'private' && selectedChat.recipientId)"
-          class="chat-header p-4 bg-gray-800 text-white border-b border-gray-600 flex items-center">
-        <template v-if="selectedChat.roomType === 'private' && selectedChat.recipientId">
-          <Avatar 
-            v-if="selectedChat.avatar" 
-            :image="selectedChat.avatar || '/default_avatar.png'" class="mr-3 cursor-pointer" 
-            @click="showChatHeaderContactPopover($event)"
-            aria-haspopup="true"
-            aria-controls="chatHeaderContactPopover"
-            v-tooltip.bottom="'View Profile'"
-          />
-          <h2 
-            class="text-xl cursor-pointer hover:underline" 
-            @click="showChatHeaderContactPopover($event)"
-            aria-haspopup="true"
-            aria-controls="chatHeaderContactPopover"
-          >
-            {{ selectedChat.name }}
-          </h2>
-        </template>
-        <template v-else> <Avatar :image="selectedChat.avatar || '/default_team_avatar.png'" class="mr-3" /> <h2 class="text-xl">{{ selectedChat.name }}</h2>
-        </template>
+          class="chat-header p-4 bg-gray-800 text-white border-b border-gray-600 flex items-center justify-between">
+        <div class="flex items-center">
+          <template v-if="selectedChat.roomType === 'private' && selectedChat.recipientId">
+            <Avatar 
+              v-if="selectedChat.avatar" 
+              :image="selectedChat.avatar || '/default_avatar.png'" class="mr-3 cursor-pointer" 
+              @click="showChatHeaderContactPopover($event)"
+              aria-haspopup="true"
+              aria-controls="chatHeaderContactPopover"
+              v-tooltip.bottom="'View Profile'"
+            />
+            <h2 
+              class="text-xl cursor-pointer hover:underline" 
+              @click="showChatHeaderContactPopover($event)"
+              aria-haspopup="true"
+              aria-controls="chatHeaderContactPopover"
+            >
+              {{ selectedChat.name }}
+            </h2>
+          </template>
+          <template v-else> <Avatar :image="selectedChat.avatar || '/default_team_avatar.png'" class="mr-3" /> <h2 class="text-xl">{{ selectedChat.name }}</h2>
+          </template>
+        </div>
+        
+        <Button 
+          v-if="selectedChat.roomType === 'private' && selectedChat.recipientId"
+          icon="pi pi-video" 
+          @click="startCall"
+          :disabled="isInCall"
+          class="p-button-rounded p-button-text"
+          v-tooltip.bottom="isInCall ? 'Call in progress' : 'Start video call'"
+        />
       </div>
       <div v-else class="no-chat-selected flex-1 flex items-center justify-center text-gray-400">
         <p class="text-2xl">Select a chat to start messaging</p>
@@ -197,10 +208,70 @@
       :breakpoints="{ '960px': '90vw' }">
     <img :src="modalImageUrl" alt="Preview" class="w-full h-auto max-h-[80vh] object-contain" />
   </Dialog>
+
+  <Dialog 
+    v-model:visible="callDialogVisible" 
+    :modal="true" 
+    :closable="false"
+    :style="{ width: '90vw', maxWidth: '800px' }"
+    :header="callStatus"
+  >
+    <div class="grid grid-cols-2 gap-4">
+      <div class="relative">
+        <video 
+          ref="localVideoRef" 
+          autoplay 
+          muted 
+          playsinline
+          class="w-full rounded-lg bg-black"
+        ></video>
+        <div class="absolute bottom-2 left-2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
+          You
+        </div>
+      </div>
+      <div class="relative">
+        <video 
+          ref="remoteVideoRef" 
+          autoplay 
+          playsinline
+          class="w-full rounded-lg bg-black"
+        ></video>
+        <div class="absolute bottom-2 left-2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
+          {{ isCallIncoming ? currentCall?.name : selectedChat?.name }}
+        </div>
+      </div>
+    </div>
+    
+    <template #footer>
+      <div class="flex justify-center gap-2">
+        <Button 
+          v-if="isCallIncoming"
+          icon="pi pi-phone" 
+          @click="answerCall"
+          class="p-button-success"
+          label="Answer"
+        />
+        <Button 
+          v-if="isCallIncoming"
+          icon="pi pi-times" 
+          @click="rejectCall"
+          class="p-button-danger"
+          label="Reject"
+        />
+        <Button 
+          v-if="isCallActive || isInCall"
+          icon="pi pi-phone-slash" 
+          @click="endCall"
+          class="p-button-danger"
+          label="End Call"
+        />
+      </div>
+    </template>
+  </Dialog>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'; // Importar onUnmounted
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import socket from '@/utils/socket';
 import { parseJwt } from '@/utils/jwt';
 import Avatar from 'primevue/avatar';
@@ -213,6 +284,7 @@ import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
 import ManualCldImage from '@/components/ManualCldImage.vue';
 import ManualCldVideo from '@/components/ManualCldVideo.vue';
 import apiService from '@/services/apiService';
+import Peer from 'peerjs';
 
 const cloudinaryCloudName = 'duhrxfco6';
 
@@ -305,7 +377,7 @@ const showChatHeaderContactPopover = async (event) => {
   } catch (error) {
     console.error("Error fetching contact details for chat header popover:", error);
     activeChatContactDetails.value = { 
-      ...activeChatContactDetails.value, 
+      ...activeChatDetails.value, 
       isLoading: false, 
       error: 'Failed to load details' 
     };
@@ -424,6 +496,29 @@ onMounted(async () => {
     console.log("Chat.vue: Joining team channel rooms:", teamChannelRoomIds);
     socket.emit('joinAllRooms', teamChannelRoomIds);
   }
+
+  // Initialize PeerJS
+  initializePeer();
+
+  // Add socket listeners for call notifications
+  socket.on('call-user', (data) => {
+    // The actual call handling is done by PeerJS
+    // This is just for UI notifications
+    if (!isInCall.value) {
+      handleIncomingCall(data);
+    }
+  });
+
+  socket.on('call-rejected', () => {
+    alert('Call was rejected');
+    endCall();
+  });
+
+  socket.on('call-ended', () => {
+    alert('Call ended');
+    endCall();
+  });
+
   console.log("Chat.vue: onMounted - End");
 });
 
@@ -434,6 +529,20 @@ onUnmounted(() => {
   socket.off("previousMessages", handlePreviousMessages);
   socket.off("messageError", handleMessageError);
   // Si te unes a salas específicas al seleccionar chat, considera emitir "leaveRoom" aquí para selectedChat.value.id si existe
+
+  // Remove call-related socket listeners
+  socket.off('call-user');
+  socket.off('call-rejected');
+  socket.off('call-ended');
+  
+  // Clean up PeerJS
+  if (peer.value) {
+    peer.value.destroy();
+    peer.value = null;
+  }
+  
+  // Clean up any active call
+  endCall();
 });
 
 
@@ -590,6 +699,263 @@ const formatBytes = (bytes, decimals = 2) => {
 const openImageModal = (url) => {
     modalImageUrl.value = url;
     isImageModalVisible.value = true;
+};
+
+// Add new refs for call handling
+const isInCall = ref(false);
+const isCallActive = ref(false);
+const isCallIncoming = ref(false);
+const currentCall = ref(null);
+const localStream = ref(null);
+const remoteStream = ref(null);
+const peerConnection = ref(null);
+const callDialogVisible = ref(false);
+const localVideoRef = ref(null);
+const remoteVideoRef = ref(null);
+const callStatus = ref('');
+
+// Add PeerJS related refs
+const peer = ref(null);
+const myPeerId = ref(null);
+const call = ref(null);
+
+// Initialize PeerJS
+const initializePeer = () => {
+    // Use the current user's ID as the peer ID for consistent connections
+    const peerId = `user-${currentUser.value.id}`;
+    myPeerId.value = peerId;
+    
+    // Create PeerJS instance with more reliable configuration
+    peer.value = new Peer(peerId, {
+        host: '0.peerjs.com',
+        secure: true,
+        port: 443,
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
+            ]
+        },
+        debug: 2,
+        reconnectTimer: 2000,
+        maxRetries: 5
+    });
+
+    peer.value.on('open', (id) => {
+        console.log('My peer ID is:', id);
+        // Join socket room with peer ID
+        socket.emit('join-peer-room', id);
+    });
+
+    peer.value.on('error', (err) => {
+        console.error('PeerJS error:', err);
+        if (err.type === 'peer-unavailable') {
+            console.log('Peer is unavailable, will retry connection...');
+        } else if (err.type === 'network') {
+            console.log('Network error, attempting to reconnect...');
+            // Attempt to reconnect
+            setTimeout(() => {
+                if (peer.value && !peer.value.disconnected) {
+                    peer.value.reconnect();
+                }
+            }, 2000);
+        } else {
+            alert('Error in peer connection: ' + err.message);
+        }
+    });
+
+    peer.value.on('disconnected', () => {
+        console.log('Disconnected from PeerJS server, attempting to reconnect...');
+        if (peer.value && !peer.value.destroyed) {
+            peer.value.reconnect();
+        }
+    });
+
+    peer.value.on('close', () => {
+        console.log('Connection to PeerJS server closed');
+        // Attempt to reconnect if not destroyed
+        if (peer.value && !peer.value.destroyed) {
+            setTimeout(() => {
+                peer.value.reconnect();
+            }, 2000);
+        }
+    });
+
+    // Handle incoming calls
+    peer.value.on('call', async (incomingCall) => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: true, 
+                audio: true 
+            });
+            
+            if (!peer.value || peer.value.destroyed) {
+                throw new Error('Peer connection lost');
+            }
+
+            if (localVideoRef.value) {
+                localVideoRef.value.srcObject = stream;
+            }
+
+            // Store the call reference
+            call.value = incomingCall;
+            
+            // Show incoming call dialog
+            isCallIncoming.value = true;
+            callDialogVisible.value = true;
+            callStatus.value = 'Incoming call...';
+
+            // Store the caller's ID
+            currentCall.value = {
+                from: incomingCall.peer,
+                callId: incomingCall.metadata?.callId
+            };
+
+            // Answer the call with our stream
+            incomingCall.answer(stream);
+
+            // Handle the remote stream
+            incomingCall.on('stream', (remoteStream) => {
+                if (!peer.value || peer.value.destroyed) {
+                    throw new Error('Peer connection lost');
+                }
+                remoteStream.value = remoteStream;
+                if (remoteVideoRef.value) {
+                    remoteVideoRef.value.srcObject = remoteStream;
+                }
+                isCallActive.value = true;
+                callStatus.value = 'Connected';
+            });
+
+            // Handle call end
+            incomingCall.on('close', () => {
+                endCall();
+            });
+
+        } catch (error) {
+            console.error('Error handling incoming call:', error);
+            alert('Error accessing camera/microphone or connection lost. Please check permissions and try again.');
+            rejectCall();
+        }
+    });
+};
+
+// Modify startCall to use the recipient's ID
+const startCall = async () => {
+    if (!selectedChat.value.recipientId || !peer.value) return;
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: true, 
+            audio: true 
+        });
+        
+        if (localVideoRef.value) {
+            localVideoRef.value.srcObject = stream;
+        }
+
+        // Generate a call ID
+        const callId = 'call-' + Math.random().toString(36).substr(2, 9);
+
+        // Make the call using the recipient's user ID
+        const recipientPeerId = `user-${selectedChat.value.recipientId}`;
+        console.log('Attempting to call peer:', recipientPeerId);
+        
+        call.value = peer.value.call(recipientPeerId, stream, {
+            metadata: { callId }
+        });
+
+        // Handle the remote stream
+        call.value.on('stream', (remoteStream) => {
+            remoteStream.value = remoteStream;
+            if (remoteVideoRef.value) {
+                remoteVideoRef.value.srcObject = remoteStream;
+            }
+            isCallActive.value = true;
+            callStatus.value = 'Connected';
+        });
+
+        // Handle call end
+        call.value.on('close', () => {
+            endCall();
+        });
+
+        isInCall.value = true;
+        callDialogVisible.value = true;
+        callStatus.value = 'Calling...';
+
+        // Notify the server about the call
+        socket.emit('call-user', {
+            userToCall: selectedChat.value.recipientId,
+            from: currentUser.value.id,
+            name: currentUser.value.username,
+            callId
+        });
+
+    } catch (error) {
+        console.error('Error starting call:', error);
+        alert('Error accessing camera/microphone or connecting to peer. Please check permissions and try again.');
+    }
+};
+
+const handleIncomingCall = async (data) => {
+    isCallIncoming.value = true;
+    currentCall.value = data;
+    callDialogVisible.value = true;
+    callStatus.value = 'Incoming call...';
+};
+
+const answerCall = async () => {
+    // The call is already being handled in the peer.on('call') event
+    // This method is kept for UI consistency
+    isCallIncoming.value = false;
+};
+
+const rejectCall = () => {
+    if (call.value) {
+        call.value.close();
+    }
+    if (currentCall.value) {
+        socket.emit('reject-call', {
+            to: currentCall.value.from,
+            callId: currentCall.value.callId
+        });
+    }
+    endCall();
+};
+
+const endCall = () => {
+    if (call.value) {
+        call.value.close();
+        call.value = null;
+    }
+    
+    if (localStream.value) {
+        localStream.value.getTracks().forEach(track => track.stop());
+        localStream.value = null;
+    }
+    
+    if (remoteStream.value) {
+        remoteStream.value.getTracks().forEach(track => track.stop());
+        remoteStream.value = null;
+    }
+
+    if (currentCall.value) {
+        socket.emit('end-call', {
+            callId: currentCall.value.callId,
+            to: isCallIncoming.value ? currentCall.value.from : selectedChat.value.recipientId
+        });
+    }
+
+    isInCall.value = false;
+    isCallActive.value = false;
+    isCallIncoming.value = false;
+    currentCall.value = null;
+    callDialogVisible.value = false;
+    callStatus.value = '';
 };
 
 </script>

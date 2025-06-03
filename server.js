@@ -100,12 +100,39 @@ app.post('/api/cloudinary-signature', (req, res) => { // Mantenido sin authentic
 
 // ---------- CONEXION A LA BASE DE DATOS ----------
 const connection = mysql.createConnection({
-    host: 'localhost', user: 'root', password: '', database: 'db_poi_v1', port: 33065
+    host: 'localhost',
+    user: 'root',
+    password: '12345',  // Default password from docker-compose
+    database: 'db_poi_v1',
+    port: 3306  // Default MySQL port in Docker
 });
-connection.connect((err) => {
-    if (err) { console.error('Error al conectar a la base de datos:', err.stack); return; }
-    console.log('Conectado a la base de datos con ID', connection.threadId);
+
+// Add connection error handling and retry logic
+const connectWithRetry = () => {
+    connection.connect((err) => {
+        if (err) {
+            console.error('Error al conectar a la base de datos:', err.stack);
+            console.log('Reintentando conexión en 5 segundos...');
+            setTimeout(connectWithRetry, 5000);
+            return;
+        }
+        console.log('Conectado a la base de datos con ID', connection.threadId);
+    });
+};
+
+// Handle connection errors
+connection.on('error', (err) => {
+    console.error('Error en la conexión a la base de datos:', err);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNREFUSED') {
+        console.log('Reconectando a la base de datos...');
+        connectWithRetry();
+    } else {
+        throw err;
+    }
 });
+
+// Start initial connection
+connectWithRetry();
 
 // --- FUNCIONES GENERADORAS DE ID ---
 function generateUserID() { return crypto.randomBytes(5).toString('hex'); }
@@ -619,6 +646,15 @@ app.get('/api/users/:userId', authenticateToken, (req, res) => {
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
+    // Add peer ID tracking
+    const userPeerIds = new Map(); // Maps socket.id to peer ID
+
+    // Handle peer ID registration
+    socket.on("join-peer-room", (peerId) => {
+        userPeerIds.set(socket.id, peerId);
+        console.log(`User ${socket.id} registered with peer ID: ${peerId}`);
+    });
+
     socket.on("sendMessage", async ({ room, message, sender_id, receiver_id, team_id, channel_name, roomType, file_info }) => {
         if (!sender_id || !(message || file_info) || !roomType) {
             return socket.emit('messageError', { message: 'Faltan datos esenciales para el mensaje.' });
@@ -722,7 +758,117 @@ io.on("connection", (socket) => {
         });
     });
 
-    socket.on("disconnect", () => console.log("Usuario desconectado:", socket.id));
+    // Modify call-user event to use peer IDs
+    socket.on("call-user", ({ userToCall, from, name, callId }) => {
+        // Find the socket ID for the user being called
+        const targetSocketId = Array.from(userPeerIds.entries())
+            .find(([_, peerId]) => peerId === userToCall)?.[0];
+
+        if (!targetSocketId) {
+            console.error('Target user not found:', userToCall);
+            return;
+        }
+
+        // Store call information in database
+        const query = 'INSERT INTO video_calls (id, caller_id, receiver_id, status) VALUES (?, ?, ?, ?)';
+        connection.query(query, [callId, from, userToCall, 'active'], (err) => {
+            if (err) {
+                console.error('Error storing call:', err);
+                return;
+            }
+            
+            // Emit to the user being called
+            io.to(targetSocketId).emit("call-user", {
+                from,
+                name,
+                callId
+            });
+        });
+    });
+
+    socket.on("answer-call", ({ to, signal, callId }) => {
+        // Update call status in database
+        const query = 'UPDATE video_calls SET status = ? WHERE id = ?';
+        connection.query(query, ['active', callId], (err) => {
+            if (err) {
+                console.error('Error updating call status:', err);
+                return;
+            }
+            
+            // Emit to the caller
+            io.to(to).emit("call-accepted", {
+                signal,
+                callId
+            });
+        });
+    });
+
+    socket.on("reject-call", ({ to, callId }) => {
+        // Update call status in database
+        const query = 'UPDATE video_calls SET status = ?, ended_at = CURRENT_TIMESTAMP WHERE id = ?';
+        connection.query(query, ['missed', callId], (err) => {
+            if (err) {
+                console.error('Error updating call status:', err);
+                return;
+            }
+            
+            // Emit to the caller
+            io.to(to).emit("call-rejected", { callId });
+        });
+    });
+
+    socket.on("end-call", ({ callId, to }) => {
+        // Update call status in database
+        const query = 'UPDATE video_calls SET status = ?, ended_at = CURRENT_TIMESTAMP WHERE id = ?';
+        connection.query(query, ['ended', callId], (err) => {
+            if (err) {
+                console.error('Error updating call status:', err);
+                return;
+            }
+            
+            // Emit to the other peer
+            io.to(to).emit("call-ended", { callId });
+        });
+    });
+
+    socket.on("call-participant-joined", ({ callId, userId }) => {
+        const query = 'INSERT INTO video_call_participants (id, video_call_id, user_id) VALUES (?, ?, ?)';
+        const participantId = crypto.randomBytes(7).toString('hex');
+        
+        connection.query(query, [participantId, callId, userId], (err) => {
+            if (err) {
+                console.error('Error recording participant:', err);
+            }
+        });
+    });
+
+    socket.on("call-participant-left", ({ callId, userId }) => {
+        const query = 'UPDATE video_call_participants SET left_at = CURRENT_TIMESTAMP WHERE video_call_id = ? AND user_id = ?';
+        connection.query(query, [callId, userId], (err) => {
+            if (err) {
+                console.error('Error updating participant status:', err);
+            }
+        });
+    });
+
+    // WebRTC signaling events
+    socket.on("webrtc-offer", ({ to, offer }) => {
+        socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
+    });
+
+    socket.on("webrtc-answer", ({ to, answer }) => {
+        socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
+    });
+
+    socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+        socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Usuario desconectado:", socket.id);
+        // Clean up peer ID mapping
+        userPeerIds.delete(socket.id);
+    });
 });
 
 // --- MANEJADOR DE ERRORES GLOBAL DE EXPRESS (AL FINAL) ---
