@@ -1,13 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
+import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
+import { CldImage, CldVideo } from '@cloudinary/vue'
 import { parseJwt } from '@/utils/jwt.js';
 
 socket.on("connect", () => {
     console.log("Conectado al servidor con ID:", socket.id);
 });
-
 
 const token = localStorage.getItem('user_token');
 const username = parseJwt(token).username;
@@ -15,9 +16,8 @@ const user_id = parseJwt(token).id;
 console.log(user_id);
 
 const chats = ref([
-    { id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private'},
-    { id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private'},
-    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png',type:'channel'}
+    { id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
+    { id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
 ]);
 
 const selectedChat = ref(null);
@@ -26,6 +26,70 @@ const newMessage = ref('');
 const currentRoomType = ref('');
 //const room = ref(""); // implementar cuando se tenga conexión con la base
 const isJoined = ref(false);
+
+// ==========================
+const cldCloudName = 'duhrxfco6';
+
+// (Opcional) Helper para determinar el tipo de recurso de forma más limpia
+const getResourceType = (fileInfo) => {
+    if (!fileInfo || !fileInfo.type) return 'raw'; // 'raw' es el tipo para archivos genéricos en Cloudinary
+    if (fileInfo.type.startsWith('image/')) return 'image';
+    if (fileInfo.type.startsWith('video/')) return 'video';
+    return 'raw';
+};
+
+const props = defineProps({
+    // chatId, roomType, etc., que ya estés usando
+    chatId: String, // ID del chat privado o canal
+    roomType: String, // 'private' o 'channel'
+});
+
+// Recupera el preset de las variables de entorno de Vite
+const chatUploadPreset = 'vue_chat_uploads';
+
+const chatFolder = computed(() => {
+    if (props.roomType === 'private') {
+        return `chats/private/${selectedChat.value.id}`;
+    } else if (props.roomType === 'channel') {
+        return `chats/channel/${selectedChat.value.id}`;
+    }
+    return 'chats/unknown';
+});
+
+const handleChatFileUpload = (fileData) => {
+    console.log('File uploaded for chat:', fileData);
+    // Enviar un mensaje a través de Socket.IO con la información del archivo
+    const messagePayload = {
+        room: selectedChat.value.id, // ID de la sala de socket
+        sender_id: user_id, // ID del usuario que envía
+        message: `Archivo: ${fileData.original_filename}`, // Mensaje de texto opcional
+        file_info: { // Información del archivo para guardar y mostrar
+            url: fileData.url,
+            type: fileData.file_type,
+            name: fileData.original_filename,
+            size: fileData.bytes,
+            public_id: fileData.public_id
+        },
+        roomType: selectedChat.value.type,
+        receiver_id: selectedChat.value.user_id,
+        // team_id: (si es canal y tu backend lo necesita)
+        // channel_name: (si es canal y tu backend lo necesita)
+    };
+
+    // Para chats privados, el backend usa sender_id y receiver_id para ManejarPrivateChannel_Promise
+    if (selectedChat.value.type === 'private') {
+        messagePayload.receiver_id = selectedChat.value.user_id; // user_id del otro en el chat privado
+    }
+
+    socket.emit('sendMessage', messagePayload);
+};
+
+const handleChatUploadError = (error) => {
+    console.error("Chat upload error:", error);
+    // Mostrar notificación de error al usuario
+    alert(`Error uploading file: ${error.message || 'Unknown error'}`);
+};
+// ==========================
 
 // Salir de la sala - implementar cuando el usuario abandone el grupo
 // const leaveRoom = (room) => {
@@ -59,7 +123,7 @@ const selectChat = (chat) => {
 
 const sendMessage = () => {
     if (newMessage.value.trim() === '') return;
-    
+
     socket.emit("sendMessage", {
         room: selectedChat.value.id,//id del chat 
         message: newMessage.value,
@@ -98,7 +162,7 @@ onUnmounted(() => {
 const emit = defineEmits(['view-profile'])
 
 function goToProfile() {
-  emit('view-profile', selectedChat)
+    emit('view-profile', selectedChat)
 }
 
 </script>
@@ -120,7 +184,7 @@ function goToProfile() {
         <div class="chat-area">
             <!-- Header del chat -->
             <div v-if="selectedChat" class="chat-header">
-                <img :src="selectedChat.avatar" class="chat-header-avatar"  @click="goToProfile" />
+                <img :src="selectedChat.avatar" class="chat-header-avatar" @click="goToProfile" />
                 <div>
                     <h2 class="chat-header-title">{{ selectedChat.name }}</h2>
                     <p class="chat-header-status">En línea</p>
@@ -130,7 +194,29 @@ function goToProfile() {
             <div class="message-container">
                 <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user.username === username }"
                     class="message-item">
-                    <p class="message-text" :class="msg.user.username === username ? 'message-sent' : 'message-received'">
+                    <!-- Cloudinary Media-->
+                    <div v-if="msg.file_info" class="file-message-content">
+                        <p class="message-content">{{ msg.message }}</p>
+                        <cld-image v-if="getResourceType(msg.file_info) === 'image'" :cloudName="cldCloudName"
+                            :public-id="msg.file_info.public_id" width="300" crop="limit" alt="Imagen adjunta"
+                            class="uploaded-multimedia my-2" />
+
+                        <cld-video v-else-if="getResourceType(msg.file_info) === 'video'" :cloudName="cldCloudName"
+                            :public-id="msg.file_info.public_id" controls width="400"
+                            class="uploaded-multimedia my-2" />
+
+                        <a v-else-if="getResourceType(msg.file_info) === 'raw' && msg.file_info.url"
+                            :href="msg.file_info.url" target="_blank" rel="noopener noreferrer"
+                            class="file-download-link uploaded-multimedia my-2">
+                            Descargar: {{ msg.file_info.name || 'archivo adjunto' }}
+                            <span v-if="msg.file_info.size">({{ (msg.file_info.size / 1024).toFixed(2) }} KB)</span>
+                        </a>
+                        <p v-else class="message-content italic text-gray-500">No se puede mostrar el archivo adjunto.
+                        </p>
+                    </div>
+                    <!-- End -->
+                    <p v-else class="message-text"
+                        :class="msg.user.username === username ? 'message-sent' : 'message-received'">
                         {{ msg.message }}
                     </p>
                 </div>
@@ -138,6 +224,12 @@ function goToProfile() {
 
             <!-- Input de mensaje -->
             <div class="message-input">
+                <div class="p-2"> <!--Cloudinary Button-->
+                    <CloudinaryUploadButton :buttonLabel="null" icon="pi pi-paperclip" :uploadPreset="chatUploadPreset"
+                        :folder="chatFolder" :tags="['chat', 'private', selectedChat?.id]" source="chat"
+                        :relatedId="currentChatId" @upload-success="handleChatFileUpload"
+                        @upload-error="handleChatUploadError" class="ml-2" />
+                </div>
                 <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
                     class="message-input-field" />
                 <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { response } from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -5,6 +6,7 @@ import crypto from 'crypto';
 import mysql from 'mysql';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
+import cloudinaryPkg from 'cloudinary'; // Renombrado para evitar conflicto si tienes otra variable cloudinary
 
 const app = express();
 
@@ -12,6 +14,23 @@ const app = express();
 app.use(cors({
     origin: '*', // Cambiar a dominio estando en producción
 }))
+
+// Middleware to verify JWT 
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (token == null) return res.sendStatus(401); // if there isn't any token
+
+    jwt.verify(token, 'tu_clave_secreta', (err, user) => {
+        if (err) {
+            console.error("JWT verification error:", err);
+            return res.sendStatus(403); // invalid token
+        }
+        req.user = user; // Add user payload to request
+        next(); // proceed to the next middleware or route handler
+    });
+};
 
 app.use(express.json()); // Para parsear JSON en el cuerpo de las solicitudes
 const server = createServer(app);
@@ -21,6 +40,51 @@ const io = new Server(server, {
         methods: ["GET", "POST"],
     },
 });
+// ------------------ CLAUDINARY -------------------
+
+const { config, uploader, utils } = cloudinaryPkg.v2; // Usar v2
+
+config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME = 'duhrxfco6',
+    api_key: process.env.CLOUDINARY_API_KEY = '727753889996879',
+    api_secret: process.env.CLOUDINARY_API_SECRET = 'ZFlju2cWLzqZyYZylwSTty4U0Wo',
+    secure: true,
+});
+console.log( "variable cloud name:",process.env.CLOUDINARY_CLOUD_NAME);
+console.log( "variable API_key",process.env.CLOUDINARY_API_KEY);
+
+app.post('/api/cloudinary-signature', (req, res) => { 
+    const timestamp = Math.round((new Date).getTime() / 1000);
+    const { upload_preset, folder, tags } = req.body;
+
+    if (!upload_preset) {
+        return res.status(400).json({ success: false, error: "Upload preset is required." });
+    }
+
+    let params_to_sign = {
+        timestamp: timestamp,
+        upload_preset: upload_preset,
+        source: 'uw',
+    };
+
+    if (folder) params_to_sign.folder = folder;
+    if (tags && Array.isArray(tags)) params_to_sign.tags = tags.join(','); // Tags como string separado por comas
+
+    try {
+        const signature = utils.api_sign_request(params_to_sign, process.env.CLOUDINARY_API_SECRET);
+        res.json({
+            signature,
+            timestamp,
+            api_key: process.env.CLOUDINARY_API_KEY, // El widget necesita esto
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME // El widget necesita esto
+        });
+    } catch (error) {
+        console.error("Error generating Cloudinary signature:", error);
+        res.status(500).json({ success: false, error: "Error generating signature" });
+    }
+});
+
+
 // ---------- CONEXION A LA BASE DE DATOS ----------
 
 // Crear una conexión con la base de datos
@@ -47,22 +111,6 @@ connection.query('SELECT * FROM users', (err, results) => {
     console.log('Resultados de la consulta:', results);
 });
 
-// Middleware to verify JWT 
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-    if (token == null) return res.sendStatus(401); // if there isn't any token
-
-    jwt.verify(token, 'tu_clave_secreta', (err, user) => {
-        if (err) {
-            console.error("JWT verification error:", err);
-            return res.sendStatus(403); // invalid token
-        }
-        req.user = user; // Add user payload to request
-        next(); // proceed to the next middleware or route handler
-    });
-};
 
 // Endpoint para la autenticación de usuarios
 app.post('/login', (req, res) => {
@@ -108,7 +156,7 @@ app.post('/api/teams', async (req, res) => { // O router.post('/', ...
         // Esta lógica podría estar en una función en este mismo archivo o en un servicio importado.
         // Por simplicidad, la lógica de BD iría aquí o en una función llamada desde aquí.
 
-        const newTeamId = generateTeamID(); 
+        const newTeamId = generateTeamID();
         const teamImagePath = image || 'default_team_avatar.png';
 
         // Ejemplo simplificado (deberías usar transacciones como en el ejemplo anterior de socket):
@@ -152,13 +200,13 @@ app.post('/api/teams', async (req, res) => { // O router.post('/', ...
                 });
             });
         })
-        .then(createdTeam => {
-             res.status(201).json({ success: true, team: createdTeam });
-        })
-        .catch(error => {
-            console.error("Error al crear el equipo vía API:", error);
-            res.status(500).json({ success: false, error: "Error interno del servidor al crear el equipo." });
-        });
+            .then(createdTeam => {
+                res.status(201).json({ success: true, team: createdTeam });
+            })
+            .catch(error => {
+                console.error("Error al crear el equipo vía API:", error);
+                res.status(500).json({ success: false, error: "Error interno del servidor al crear el equipo." });
+            });
 
     } catch (error) {
         console.error("Error en POST /api/teams:", error);
@@ -249,17 +297,17 @@ app.post('/api/teams/:teamId/channels', authenticateToken, async (req, res) => {
             const isOwnerQuery = 'SELECT owner_id FROM teams WHERE id = ?';
             connection.query(isOwnerQuery, [routeTeamId], async (ownerErr, ownerResults) => {
                 if (ownerErr) {
-                     console.error("Error checking team owner:", ownerErr);
-                     return res.status(500).json({ success: false, error: "Error verifying team ownership." });
+                    console.error("Error checking team owner:", ownerErr);
+                    return res.status(500).json({ success: false, error: "Error verifying team ownership." });
                 }
                 if (ownerResults.length === 0 || ownerResults[0].owner_id !== userId) {
                     return res.status(403).json({ success: false, error: "User is not an admin or owner of this team." });
                 }
-                 // If owner, proceed to create channel
+                // If owner, proceed to create channel
                 await proceedWithChannelCreation();
             });
         } else {
-             // If admin, proceed to create channel
+            // If admin, proceed to create channel
             await proceedWithChannelCreation();
         }
     });
@@ -275,7 +323,7 @@ app.post('/api/teams/:teamId/channels', authenticateToken, async (req, res) => {
                         console.error("Error fetching newly created/found channel details:", err);
                         return res.status(500).json({ success: false, error: "Channel processed but could not retrieve details." });
                     }
-                    
+
                     // Optionally: Emit an event to team members about the new channel
                     // io.to(`team-${routeTeamId}`).emit('channelCreated', newChannelDetails[0]);
                     // (Clients would need to join `team-${routeTeamId}` rooms upon team selection)
@@ -406,7 +454,7 @@ app.delete('/api/tasks/:taskId', authenticateToken, async (req, res) => {
                 return res.status(500).json({ success: false, error: "Failed to delete task." });
             }
             if (deleteResult.affectedRows === 0) {
-                 return res.status(404).json({ success: false, error: "Task not found or already deleted." });
+                return res.status(404).json({ success: false, error: "Task not found or already deleted." });
             }
             res.status(200).json({ success: true, message: "Task deleted successfully." });
         });
@@ -446,10 +494,10 @@ app.get('/api/tasks/:taskId/submissions', authenticateToken, async (req, res) =>
 
     // Verify current user is the task creator
     connection.query('SELECT creator_id FROM tasks WHERE id = ?', [taskId], (taskErr, taskResults) => {
-        if (taskErr) return res.status(500).json({ success: false, error: "Error verifying task."});
-        if (taskResults.length === 0) return res.status(404).json({ success: false, error: "Task not found."});
+        if (taskErr) return res.status(500).json({ success: false, error: "Error verifying task." });
+        if (taskResults.length === 0) return res.status(404).json({ success: false, error: "Task not found." });
         if (taskResults[0].creator_id !== currentUserId) {
-            return res.status(403).json({ success: false, error: "You are not authorized to view submissions for this task."});
+            return res.status(403).json({ success: false, error: "You are not authorized to view submissions for this task." });
         }
 
         const submissionsQuery = `
@@ -598,7 +646,7 @@ io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
     // Escuchar mensajes, guardarlos en la BD y enviarlos a la sala
-    socket.on("sendMessage", async ({ room, message, sender_id, receiver_id, team_id, channel_name, roomType }) => {
+    socket.on("sendMessage", async ({ room, message, sender_id, receiver_id, team_id, channel_name, roomType, file_info }) => {
         // 'room' podría ser el ID si ya se conoce, o podríamos ignorarlo y depender de los otros params.
         // Para este ejemplo, asumimos que para canales, el cliente podría enviar team_id y channel_name.
         // Para privados, sender_id (quien envía) y receiver_id (el otro participante).
@@ -635,6 +683,7 @@ io.on("connection", (socket) => {
                 const teamChannelResponse = await ManejarTeamChannel_Promise({ team_id, channel_name });
                 if (!teamChannelResponse.success) throw new Error(teamChannelResponse.error || "Failed to get/create team channel");
                 teamChannelIdValue = teamChannelResponse.channel_id;
+                
 
             } else {
                 console.error("Tipo de sala no válido:", roomType);
@@ -642,29 +691,34 @@ io.on("connection", (socket) => {
             }
 
             // --- Lógica común para insertar el mensaje ---
-            const query = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES (?, ?, ?, ?, ?, ?)';
-            const values = [messageId, sender_id, chatIdValue, teamChannelIdValue, message, createdAt];
+            const messageContent = file_info ? (message || `Archivo: ${file_info.name}`) : message;
+            const messageQuery = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES (?, ?, ?, ?, ?, ?)';
+            const messageValues = [messageId, sender_id, chatIdValue, teamChannelIdValue, messageContent, createdAt];
 
-            // Para usar await con connection.query, necesitas "promisificarlo"
-            // Opción A: Usar una librería como mysql2/promise
-            // Opción B: Envolver la llamada en new Promise (como haremos aquí para el ejemplo)
-            // Opción C: Usar util.promisify de Node.js
 
             await new Promise((resolve, reject) => {
-                connection.query(query, values, (err, result) => {
-                    if (err) {
-                        console.error('Error al guardar el mensaje en la BD:', err);
-                        let clientErrorMsg = 'Error al guardar el mensaje.';
-                        if (err.errno === 1452) { // Error de FK
-                            clientErrorMsg = `Error de referencia: El remitente ('${sender_id}') o la sala ('${actualRoomIdForEmit}') no son válidos.`;
-                        }
-                        // No emitir aquí, dejar que el catch principal lo haga
-                        return reject(new Error(clientErrorMsg)); // Rechazar la promesa
-                    }
-                    console.log("Mensaje guardado en la BD con ID:", messageId);
-                    resolve(result);
-                });
+                connection.query(messageQuery, messageValues, (err, result) => err ? reject(err) : resolve(result));
             });
+
+            let multimediaRecordId = null;
+            if (file_info && file_info.url) {
+                multimediaRecordId = generateVARCHAR15ID(); // ID para la tabla multimedia
+                const multimediaQuery = 'INSERT INTO multimedia (id, message_id, file_path, file_type, original_filename, bytes, public_id, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+                const multimediaValues = [
+                    multimediaRecordId,
+                    messageId, // FK al mensaje que acabamos de crear
+                    file_info.url,
+                    file_info.type,
+                    file_info.name,
+                    file_info.size,
+                    file_info.public_id,
+                    createdAt
+                ];
+                await new Promise((resolve, reject) => {
+                    connection.query(multimediaQuery, multimediaValues, (err, result) => err ? reject(err) : resolve(result));
+                });
+            }
+            await new Promise((resolve, reject) => connection.commit(err => err ? reject(err) : resolve()));
 
             // --- Lógica común para emitir el mensaje ---
             const userResults = await new Promise((resolve, reject) => {
@@ -678,21 +732,21 @@ io.on("connection", (socket) => {
             const newMessageForRoom = {
                 id: messageId,
                 user: { id: sender_id, username: username },
-                message: message,
-                room: actualRoomIdForEmit, // Usar el ID de sala correcto
+                message: messageContent,
+                room: actualRoomIdForEmit,
                 roomType: roomType,
                 created_at: createdAt,
-                time: createdAt.toLocaleTimeString()
+                time: createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                file_info: file_info || null, // Adjuntar la info del archivo al mensaje emitido
             };
-            io.to(room).emit("receiveMessage", newMessageForRoom);
-            console.log("se envió:",message, "a sala:", room);
+
+            io.to(actualRoomIdForEmit).emit("receiveMessage", newMessageForRoom); // Emitir a la sala correcta
+            console.log("Mensaje (con archivo si aplica) enviado a la sala:", actualRoomIdForEmit);
+
         } catch (error) {
-            // Este catch manejará errores de las promesas (Manejar..._Promise o las creadas para connection.query)
-            console.error("Error procesando sendMessage:", error.message);
-            // Asegúrate de no enviar múltiples respuestas de error al socket
-            if (socket && !socket.headersSent) { // headersSent no aplica a sockets, mejor un flag o verificar si ya se emitió error
-                socket.emit('messageError', { message: error.message || 'Ocurrió un error procesando el mensaje.' });
-            }
+            await new Promise((resolve) => connection.rollback(() => resolve()));
+            console.error("Error procesando sendMessage (con archivo):", error.message);
+            socket.emit('messageError', { message: error.message || 'Error procesando el mensaje.' });
         }
     });
 

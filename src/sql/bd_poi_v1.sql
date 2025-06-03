@@ -87,12 +87,15 @@ CREATE TABLE task_submissions (
     id VARCHAR(15) PRIMARY KEY,
     task_id VARCHAR(15) NOT NULL,
     user_id VARCHAR(10) NOT NULL,                     -- Usuario que completó la tarea
+    multimedia_id VARCHAR(15) NULL,
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT,                                       
     UNIQUE (task_id, user_id),                        -- Asegurarse que el usuario sólo puedar subirlo 1 vez
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (multimedia_id) REFERENCES multimedia(id) ON DELETE SET NULL
 );
+
 
 -- Tabla de Archivos Multimedia
 CREATE TABLE multimedia (
@@ -101,10 +104,14 @@ CREATE TABLE multimedia (
     task_id VARCHAR(15),
     file_path VARCHAR(255) NOT NULL,
     file_type VARCHAR(50),
+    original_filename VARCHAR(255) NULL,
+    bytes INT NULL,
+    public_id VARCHAR(255) NULL,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
+
 
 -- Tabla de Mensajes Fijados
 CREATE TABLE pinned_teams (

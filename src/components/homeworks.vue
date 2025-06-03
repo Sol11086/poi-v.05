@@ -51,17 +51,17 @@
 
 
                     <template #icons>
-                            <div class="flex  items-center space-x-3">
-                                <span class="text-xs text-gray-400 italic">
-                                    {{ t.due_date ? `Vence: ${new Date(t.due_date).toLocaleDateString()}` : 'Sin fecha límite' }}
-                                </span>
-                                <Tag :value="t.status.toUpperCase()" :severity="getStatusSeverity(t.status)"
-                                    class="p-1 text-xs text-[#9f86f9]"></Tag>
-                                <Button v-if="t.is_creator" icon="pi pi-trash" severity="danger" text rounded
-                                    aria-label="Eliminar" @click.stop="confirmDeleteTask(t)"
-                                    class="text-red-500 hover:bg-red-700 hover:text-white" />
-                            </div>
-                        
+                        <div class="flex  items-center space-x-3">
+                            <span class="text-xs text-gray-400 italic">
+                                {{ t.due_date ? `Vence: ${new Date(t.due_date).toLocaleDateString()}` : 'Sin fecha límite' }}
+                            </span>
+                            <Tag :value="t.status.toUpperCase()" :severity="getStatusSeverity(t.status)"
+                                class="p-1 text-xs text-[#9f86f9]"></Tag>
+                            <Button v-if="t.is_creator" icon="pi pi-trash" severity="danger" text rounded
+                                aria-label="Eliminar" @click.stop="confirmDeleteTask(t)"
+                                class="text-red-500 hover:bg-red-700 hover:text-white" />
+                        </div>
+
                     </template>
 
 
@@ -80,14 +80,16 @@
 
                     <template #footer>
                         <div
-                            class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-gray-700 mt-3">
-                            <FileUpload mode="basic" name="task_files[]" :url="`/api/tasks/${t.id}/upload-file`"
-                                accept="image/*,application/pdf,.doc,.docx,.txt" :maxFileSize="5000000"
-                                @upload="onTaskFileUpload" :auto="true"
-                                invalidFileSizeMessage="Archivo demasiado grande."
-                                invalidFileTypeMessage="Tipo de archivo no permitido." chooseLabel="Adjuntar Archivo"
-                                class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 rounded-full hover:bg-[#9F86F9] hover:text-white h-10"
-                                :disabled="t.completed_by_current_user || t.status === 'completed' || t.status === 'overdue'" />
+                            class="flex flex-col text-[#9F86F9] sm:flex-row justify-between items-center gap-3 pt-3 border-t border-gray-700 m-3">
+                            <CloudinaryUploadButton buttonLabel="Seleccionar Archivo para Tarea"
+                                :uploadPreset="taskUploadPreset" :folder="taskSubmissionFolder"
+                                :tags="['task_submission', currentTask ? `task-${currentTask.id}` : 'new_task']"
+                                source="task_submission" :relatedId="currentTask ? currentTask.id : null"
+                                @upload-success="handleTaskFileUploaded" @upload-error="handleTaskUploadError" />
+                            <div v-if="uploadedTaskFileInfo" class="mt-2 text-sm">
+                                Archivo seleccionado: {{ uploadedTaskFileInfo.original_filename }} ({{
+                                    (uploadedTaskFileInfo.bytes / 1024).toFixed(2) }} KB)
+                            </div>
                             <div class="flex gap-3">
                                 <Button v-if="t.is_creator" label="Ver Entregas" icon="pi pi-users"
                                     @click.stop="viewSubmissions(t)"
@@ -150,12 +152,8 @@
                 </FloatLabel>
 
                 <FloatLabel>
-                    <Dropdown
-                        id="taskTeam" v-model="task.team_id" :options="manageableTeams"
-                        optionLabel="team_name"
-                        optionValue="id"
-                        class="w-full text-white"
-                        :invalid="submitted && !task.team_id" :pt="{
+                    <Dropdown id="taskTeam" v-model="task.team_id" :options="manageableTeams" optionLabel="team_name"
+                        optionValue="id" class="w-full text-white" :invalid="submitted && !task.team_id" :pt="{
                             root: { class: 'bg-[#081e29] border-gray-600' },
                             input: { class: (task.team_id ? 'text-white' : 'text-gray-400') + ' p-2 bg-[#081e29]' }, // Estilo para el input/label
                             item: ({ props, state, context }) => ({
@@ -265,6 +263,7 @@
 </template>
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue';
+import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
 import axios from 'axios';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
@@ -291,6 +290,70 @@ const taskDialogVisible = ref(false);
 const submissionsDialogVisible = ref(false);
 const submitTaskDialogVisible = ref(false);
 
+// ==============================================
+const props = defineProps({
+  currentTask: Object, // La tarea actual para la que se está haciendo la entrega
+});
+
+const taskUploadPreset = import.meta.env.VITE_CLOUDINARY_TASK_UPLOAD_PRESET;
+const uploadedTaskFileInfo = ref(null); // Almacena la info del archivo subido a Cloudinary
+const submissionNotes = ref(''); // Para las notas de la entrega
+// const isFileRequiredForTask = ref(true); // Define si el archivo es obligatorio
+
+const taskSubmissionFolder = computed(() => {
+  return props.currentTask ? `tasks/${props.currentTask.id}/submissions` : 'tasks/submissions/orphaned';
+});
+
+const handleTaskFileUploaded = (fileData) => {
+  console.log('File uploaded for task submission:', fileData);
+  uploadedTaskFileInfo.value = fileData;
+};
+
+const handleTaskUploadError = (error) => {
+  console.error("Task submission file upload error:", error);
+  alert(`Error uploading file: ${error.message || 'Unknown error'}`);
+  uploadedTaskFileInfo.value = null;
+};
+
+const submitHomework = async () => {
+  if (!props.currentTask || !props.currentTask.id) {
+    alert("No se ha seleccionado una tarea para la entrega.");
+    return;
+  }
+  // if (isFileRequiredForTask.value && !uploadedTaskFileInfo.value) {
+  //   alert("Por favor, selecciona un archivo para la entrega.");
+  //   return;
+  // }
+
+  const payload = {
+    notes: submissionNotes.value,
+    // Si uploadedTaskFileInfo es null, el backend debería manejarlo (ej. entrega sin archivo)
+    file_info: uploadedTaskFileInfo.value
+  };
+
+  try {
+    // El endpoint del backend para /api/tasks/:taskId/submit debe ser modificado
+    const response = await axios.post(`/api/tasks/${props.currentTask.id}/submit`, payload, {
+         headers: { 'Authorization': `Bearer ${authStore.token}` } // Asegúrate de enviar el token
+    });
+
+    if (response.data.success) {
+      alert("Tarea entregada exitosamente!");
+      // Resetear estado, cerrar diálogo, refrescar lista de tareas, etc.
+      uploadedTaskFileInfo.value = null;
+      submissionNotes.value = '';
+      // emit('submission-successful');
+    } else {
+      alert(`Error al entregar la tarea: ${response.data.error}`);
+    }
+  } catch (error) {
+    console.error("Error submitting homework:", error.response ? error.response.data : error.message);
+    alert(`Error del servidor al entregar la tarea: ${error.response?.data?.error || error.message}`);
+  }
+};
+
+// ==============================================
+
 const initialTaskState = () => ({
     title: '',
     description: '',
@@ -300,7 +363,6 @@ const initialTaskState = () => ({
     notify_by_email: false
 });
 const task = ref(initialTaskState());
-const submissionNotes = ref('');
 const taskToSubmitForNotes = ref(null);
 
 const submitted = ref(false);
@@ -430,10 +492,10 @@ const hideDialog = () => {
 const saveTask = async () => {
     submitted.value = true;
     if (!task.value.title || !task.value.team_id) {
-    console.warn('Título y equipo son obligatorios.');
-    // toast.add({ severity: 'warn', summary: 'Atención', detail: 'Título y equipo son obligatorios.', life: 3000 });
-    return;
-  }
+        console.warn('Título y equipo son obligatorios.');
+        // toast.add({ severity: 'warn', summary: 'Atención', detail: 'Título y equipo son obligatorios.', life: 3000 });
+        return;
+    }
 
     try {
         const token = getToken();
@@ -579,5 +641,4 @@ const onTaskFileUpload = (event) => {
     display: flex;
     flex-direction: row;
 }
-
 </style>
