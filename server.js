@@ -749,49 +749,46 @@ app.use((err, req, res, next) => {
         success: false,
         error: err.message || 'Error interno del servidor.'
     });
-});
 
-//////VIDEO_LLAMADA////////
+    //////VIDEO_LLAMADA////////
 
-//PLEEASE SO FOR ONCE IN MY LIFE
-////Let me get WHAT I WANT 
-///LORD KNOWA. IT WOULD BE THE FIRST TIME
+    //PLEEASE SO FOR ONCE IN MY LIFE
+    ////Let me get WHAT I WANT 
+    ///LORD KNOWA. IT WOULD BE THE FIRST TIME
 
-socket.on("webrtc-offer", ({ to, offer }) => {
-    socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
-});
+    socket.on("webrtc-offer", ({ to, offer }) => {
+        socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
+    });
 
-socket.on("webrtc-answer", ({ to, answer }) => {
-    socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
-});
+    socket.on("webrtc-answer", ({ to, answer }) => {
+        socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
+    });
 
-socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
-    socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
-});
+    socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+        socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
+    });
 
-// Opcional: notificar que un usuario está listo para llamar
-socket.on("ready-for-call", ({ room }) => {
-    socket.to(room).emit("user-ready", { id: socket.id });
-});
+    // Opcional: notificar que un usuario está listo para llamar
+    socket.on("ready-for-call", ({ room }) => {
+        socket.to(room).emit("user-ready", { id: socket.id });
+    });
 
+    socket.on("webrtc-offer", ({ to, offer }) => {
+        socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
+    });
 
-/////FIN VIDEOLLAMADA///////
+    socket.on("webrtc-answer", ({ to, answer }) => {
+        socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
+    });
 
-socket.on("webrtc-offer", ({ to, offer }) => {
-    socket.to(to).emit("webrtc-offer", { from: socket.id, offer });
-});
+    socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+        socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
+    });
 
-socket.on("webrtc-answer", ({ to, answer }) => {
-    socket.to(to).emit("webrtc-answer", { from: socket.id, answer });
-});
-
-socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
-    socket.to(to).emit("webrtc-ice-candidate", { from: socket.id, candidate });
-});
-
-// Opcional: notificar que un usuario está listo para llamar
-socket.on("ready-for-call", ({ room }) => {
-    socket.to(room).emit("user-ready", { id: socket.id });
+    // Opcional: notificar que un usuario está listo para llamar
+    socket.on("ready-for-call", ({ room }) => {
+        socket.to(room).emit("user-ready", { id: socket.id });
+    });
 });
 
 

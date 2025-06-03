@@ -3,7 +3,6 @@ import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import Chat from "@/components/chat.vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
-import axios from 'axios';
 import { parseJwt } from '@/utils/jwt.js';
 import { InputText } from "primevue";
 import { content, header } from "@primeuix/themes/aura/accordion";
@@ -24,8 +23,10 @@ onMounted(() => {
 });
 
 const countries = ref([
-    { user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
-    { user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
+    { name: 'Contacto 1', code: 'AU', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { name: 'Contacto 2', code: 'BR', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { name: 'Contacto 3', code: 'CN', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { name: 'Contacto 4', code: 'EG', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
 ]);
 
 const selectedTeam = computed(() => {
@@ -42,6 +43,123 @@ const visibleRight = ref(false);
 const microphoneOn = ref(false);
 const cameraOn = ref(false);
 const audioOn = ref(false);
+
+const localVideoRef = ref<HTMLVideoElement | null>(null);
+const remoteVideoRef = ref<HTMLVideoElement | null>(null);
+const peer = new Peer(); // Si estás usando PeerJS
+let localStream: MediaStream;
+
+peer.on('call', call => {
+    call.answer(localStream)
+    call.on('stream', remoteStream => {
+        remoteVideoRef.srcObject = remoteStream
+    })
+})
+
+const visibleCreateRoom = ref(false);
+const visibleVideoCall = ref(false);
+
+const startCall = async () => {
+    try {
+        // Obtener acceso a la cámara y micrófono
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+        // Asignar stream local al video local
+        if (localVideoRef.value) {
+            localVideoRef.value.srcObject = stream;
+        }
+
+        // Hacer la llamada usando callId como remote peer ID
+        if (!callId) {
+            console.error("callId no está definido.");
+            return;
+        }
+
+        const call = peer.call(callId, stream);
+
+        // Escuchar el stream remoto y asignarlo al video remoto
+        call.on('stream', (remoteStream) => {
+            if (remoteVideoRef.value) {
+                remoteVideoRef.value.srcObject = remoteStream;
+            }
+        });
+
+        // Guardar stream y llamada para detener luego
+        currentCall.value = call;
+        localStream.value = stream;
+
+    } catch (error) {
+        console.error('Error al iniciar llamada:', error);
+    }
+};
+
+function handleCallClick(id: number) {
+    visibleVideoCall = true;
+    remotePeerId.value = id;
+    callId.value = id;
+    cameraOn.value = true; 
+    microphoneOn.value = true;
+    startCall(id);
+}
+
+function endCall() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    if (localVideoRef.value) {
+        localVideoRef.value.srcObject = null;
+    }
+    if (remoteVideoRef.value) {
+        remoteVideoRef.value.srcObject = null;
+    }
+
+    cameraOn.value = false;
+    microphoneOn.value = false;
+
+    callId.value = null;
+}
+
+watch([cameraOn, callId], async ([cam, id]) => {
+    if (cam && id !== null) {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            if (localVideoRef.value) {
+                localVideoRef.value.srcObject = localStream;
+            }
+            console.log('✅ Cámara activada');
+        } catch (error) {
+            console.error('🚫 No se pudo acceder a la cámara/micrófono:', error);
+            alert('Activa los permisos de cámara y micrófono para iniciar la llamada.');
+            cameraOn.value = false;
+        }
+    }
+});
+
+// Detén el stream cuando se cierra el diálogo o se apaga la cámara
+watch([callId, cameraOn], ([id, cam]) => {
+    if (id === null || !cam) {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+            console.log('📴 Cámara detenida');
+        }
+    }
+});
+
+// Limpia cuando se destruye el componente
+onUnmounted(() => {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+});
+
 
 // chat script
 
@@ -120,155 +238,6 @@ onUnmounted(() => {
     socket.off("receiveMessage");
 });
 
-// -----------Variables para los inputs del formulario-----------------
-let teamTitle = ref('');
-let teamDescription = ref('');
-let selectedMembers = ref([]); // Para el MultiSelect
-
-// Lista de usuarios/países para el MultiSelect (esto debería venir de tu backend o estado global)
-// Por ahora, un ejemplo. Necesitarás cargar tus usuarios reales aquí.
-const availableUsers = ref([
-    // Ejemplo de formato, asumiendo que tus usuarios tienen 'id' y 'username'
-    // Deberías obtener esta lista del servidor
-    { user_id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar_url: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
-    { user_id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar_url: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
-]);
-
-
-
-function getOwnerId() {
-    const token = localStorage.getItem('user_token');
-    if (token) {
-        try {
-            const decodedToken = jwtDecode(token);
-            return decodedToken.id; // Asumiendo que el token tiene un campo 'id' para el user ID
-        } catch (error) {
-            console.error("Error decodificando token:", error);
-            return null;
-        }
-    }
-    return null;
-};
-
-
-const handleCreateTeam = async () => { // Convertir a async
-    const ownerId = getOwnerId();
-    // ... validaciones ...
-
-    const teamData = {
-        team_name: teamTitle.value,
-        owner_id: ownerId,
-        // image: ...,
-        description: teamDescription.value,
-        members: selectedMembers.value.map(member => member.user_id)
-    };
-
-    try {
-        // Asegúrate que la URL base (ej: http://localhost:3000) sea correcta
-        const response = await axios.post(API_BASE_URL+'/api/teams', teamData, {
-            headers: {
-                // Si necesitas enviar el token JWT para autenticación en el endpoint HTTP
-                // 'Authorization': `Bearer ${localStorage.getItem('token')}`
-                'ngrok-skip-browser-warning': 'true'
-            }
-        });
-
-        if (response.data.success) {
-            console.log('Equipo creado exitosamente:', response.data.team);
-            showCreateTeam.value = false;
-            teamTitle = ref('');
-            teamDescription = ref('');
-            selectedMembers = ref([]);
-            // Recargar equipos o actualizar UI
-        } else {
-            console.error('Error al crear el equipo:', response.data.error);
-            // Mostrar error al usuario
-        }
-    } catch (error) {
-        console.error('Error en la solicitud HTTP para crear equipo:', error.response ? error.response.data : error.message);
-        // Mostrar error al usuario
-    }
-
-};
-
-// Para abrir el diálogo (ejemplo, podrías tener un botón en tu template principal)
-// const openCreateTeamDialog = () => {
-// showCreateTeam.value = true;
-// };
-
-const loading = ref(true);
-const error = ref(null);
-
-// Function to construct the full image URL if your 'equipo.image' stores relative paths
-// or just returns the path if it's already a full URL or placeholder identifier.
-const getImageUrl = (imagePath) => {
-    if (!imagePath) {
-        // Return a default placeholder if no image path is provided
-        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
-    }
-
-    if (imagePath === 'default_team_avatar.png') {
-        return '/src/assets/default_team_avatar.png'; // Adjust path as needed
-    }
-    // Fallback for other cases, assuming imagePath might be a full URL or needs specific handling
-    let FinalPath = "/src/assets/" + imagePath;
-    return FinalPath;
-};
-
-
-onMounted(async () => {
-    try {
-        loading.value = true;
-        error.value = null;
-        const token = localStorage.getItem('user_token'); // Or however you store your token
-
-        if (!token) {
-            error.value = 'Authentication token not found. Please log in.';
-            // Optionally, redirect to login: router.push('/login');
-            loading.value = false;
-            return;
-        }
-
-        const response = await axios.get(API_BASE_URL+'/api/my-teams', { // Ensure the URL is correct
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'ngrok-skip-browser-warning': 'true'
-            }
-        });
-        console.log(response);
-        if (response.data.success) {
-            equipos.value = response.data.teams.map(team => ({
-                id: team.id,
-                team_name: team.team_name,
-                image: team.image || 'default_team_avatar.png', // Use default if image is null/empty
-                caption: team.caption,
-                owner_id: team.owner_id
-                // map other necessary fields
-            }));
-        } else {
-            error.value = response.data.error || 'Failed to load teams.';
-        }
-    } catch (err) {
-        console.error('Error fetching teams:', err);
-        if (err.response) {
-            // Server responded with a status code that falls out of the range of 2xx
-            error.value = `Server error: ${err.response.status} - ${err.response.data.error || err.message}`;
-            if (err.response.status === 401 || err.response.status === 403) {
-                // Token might be invalid or expired, redirect to login
-                // router.push('/login');
-                error.value = 'Session expired or invalid. Please log in again.';
-            }
-        } else if (err.request) {
-            // The request was made but no response was received
-            error.value = 'No response from server. Please check your network connection.';
-        } else {
-            // Something happened in setting up the request that triggered an Error
-            error.value = `Error: ${err.message}`;
-        }
-    } finally {
-        loading.value = false;
-    }
-});
 
 const showGeneral = ref(false)
 const emit = defineEmits(['backToHome']) // o el nombre que uses en Home
@@ -277,6 +246,7 @@ function handleBack() {
     showGeneral.value = false
     emit('backToHome') // Opcional si quieres que Home sepa
 }
+
 </script>
 
 <template>
@@ -286,133 +256,32 @@ function handleBack() {
             <i class="pi pi-users"></i>
             Equipos
         </span>
-        <Button label="Crear nuevo equipo" size="small" @click="showCreateTeam = true" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+        <div class="flex gap-4 items-center justify-center">
+            <Button icon="pi pi-video" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                class="text-[#129E82] p-1"  @click="visibleCreateRoom = true"
+                v-tooltip.bottom="'Iniciar Video llamada'" />
+            <Button label="Crear nuevo equipo" size="small" @click="showCreateTeam = true" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
         rounded-full hover:bg-[#9F86F9] hover:text-white" />
+        </div>
     </div>
     <div class="h-full">
-        <div v-if="loading">Loading teams...</div>
-        <div v-else-if="error">Error loading teams: {{ error }}</div>
-        <div v-else-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
+        <div v-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
             <div v-for="equipo in equipos" :key="equipo.id"
-                class="bg-[#04293C] rounded-lg shadow-md hover:bg-[#163a4e] p-4 grid justify-center"
-                :class="{ 'active-team': selectedTeamId === equipo.id }" @click="selectTeam(equipo.id)">
-                <div class="w-[500px] h-[500px] overflow-hidden relative rounded">
-                    <img :src="getImageUrl(equipo.image)" :alt="equipo.team_name"
-                        class="absolute w-full h-full object-cover" />
-                </div>
-                <p variant="link" class="flex justify-center items-center mt-2 font-bold text-[#9F86F9]">
-                    {{ equipo.team_name }}</p>
-                <p class="flex justify-center items-center mt-2 text-gray-200 text-center">{{ equipo.caption }}</p>
-
-                <div v-if="equipos.length === 0">
-                    You are not part of any teams yet.
+                class="bg-[#04293C] rounded-lg shadow-md p-4 grid justify-center">
+                <div class="hover:bg-[#ffffff] hover:opacity-55 flex justify-center items-center"
+                    @click="generalId = equipo.id"> <img :src="equipo.urlImagen" alt="Equipo"
+                        class="team-image rounded" />
                 </div>
                 <Button variant="link"
                     class="flex justify-center items-center mt-2 font-bold text-[#9F86F9] hover:text-[#463583]">{{
                         equipo.nombre }}</Button>
-                <p class="flex justify-center items-center mt-2 text-gray-200 text-center" >{{ equipo.description }}</p>
-                <div class="justify-center flex gap-4 mt-2">
-                    <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                        class="text-[#129E82] p-1" @click.stop="activeCallTeamId = equipo.id"
-                        v-tooltip.bottom="'Iniciar llamada'" />
-                </div>
+                <p class="flex justify-center items-center mt-2 text-gray-200 text-center">{{ equipo.description }}</p>
 
-
-                <Dialog :visible="activeCallTeamId === equipo.id"
-                    @update:visible="newValue => { if (!newValue) activeCallTeamId = null; }" modal class="w-1/4 h-fit"
-                    :style="{ backgroundColor: transparent }" pt:root:class="!border-0 !bg-transparent">
-                    <template #container="{ closeCallback }">
-                        <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
-                            <span class="text-gray-500"> Comenzar llamada </span>
-                            <div class="relative w-fit h-fit">
-                                <Button icon="pi pi-phone" @click="handleCallClick"
-                                    class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
-                                <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
-                                    @click="handleCallClick"></i>
-                            </div>
-                            <Button icon="pi pi-times" @click="activeCallTeamId = false"
-                                class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
-                        </div>
-                    </template>
-                </Dialog>
-
-                <Dialog :visible="callId === equipo.id" @update:visible="newValue => { if (!newValue) callId = null; }"
-                    class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
-                        content: {
-                            class: 'p-4 h-full overflow-y-auto'
-                        }
-                    }">
-                    <template #header>
-                        <div class="flex justify-between items-center">
-                            <div class="p-4 flex justify-between items-center">
-                                <span class="text-white mr-2 font-bold">Titulo de la llamada</span>
-                                <Button icon="pi pi-comment" @click="visibleRight = !visibleRight" severity="secondary"
-                                    variant="text" rounded aria-label="Bookmark"
-                                    :class="visibleRight ? 'text-[#129E82]' : 'text-[#646466]'"
-                                    v-tooltip.bottom="'Abrir chat grupal'" />
-                                <Button icon="pi pi-microphone" severity="secondary" variant="text" rounded
-                                    aria-label="Bookmark" @click="microphoneOn = !microphoneOn"
-                                    :class="microphoneOn ? 'text-[#129E82]' : 'text-[#646466]'" />
-                                <Button icon="pi pi-camera" severity="secondary" variant="text" rounded
-                                    aria-label="Bookmark" @click="cameraOn = !cameraOn"
-                                    :class="cameraOn ? 'text-[#129E82]' : 'text-[#646466]'" class="text-[#129E82]" />
-                                <Button icon="pi pi-headphones" severity="secondary" variant="text" rounded
-                                    aria-label="Bookmark" class="text-[#129E82]" @click="audioOn = !audioOn"
-                                    :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
-                            </div>
-                            <div>
-                                <Button severity="secondary" @click="endCall" label="Colgar llamada" class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm 
-                                    font-light hover:bg-[#8a2222] hover:text-white" />
-                            </div>
-                            <div>
-                                <span class="text-white font-bold">Sala: {{ roomId }}</span>
-                                <Button label="Copiar ID" @click="copyToClipboard(roomId)" icon="pi pi-copy"
-                                    class="text-xs text-[#9F86F9]" />
-                            </div>
-                        </div>
-                    </template>
-                    <div class="flex h-full">
-                        <div v-if="visibleRight" class="relative z-10 bg-[#04293C] h-full w-1/3">
-                            <div class="h-10/12">
-                                <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#081d27] p-4">
-                                    <i class="pi pi-comment"></i>
-                                    <div>
-                                        <p class="chat-header-status">Chat grupal</p>
-                                    </div>
-                                </div>
-                                <div class="h-full bg-[#030d11] p-4">
-                                    <div v-for="msg in messages" :key="msg.id"
-                                        :class="{ 'text-right': msg.user === username }" class="message-item">
-                                        <p class="message-text"
-                                            :class="msg.user === username ? 'message-sent' : 'message-received'">
-                                            {{ msg.message }}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="bg-[#081d27] flex items-center justify-between p-4">
-                                    <InputText v-model="newMessage" @keyup.enter="sendMessage"
-                                        placeholder="Escribe un mensaje..." class="bg-[#030d11] text-white p-2" />
-                                    <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text"
-                                        rounded class="hover:text-[#129E82]" />
-                                </div>
-                            </div>
-                        </div>
-                        <video ref="localVideoRef" autoplay muted v-if="cameraOn"
-                            class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
-                            Tu camara
-                        </video>
-                        <video ref="remoteVideoRef" autoplay
-                            class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
-                            <span class="text-xl"> En espera </span>
-                            <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
-                        </video>
-                    </div>
-                </Dialog>
             </div>
         </div>
         <div v-else class="h-full">
             <div v-if="selectedTeam" class="h-full">
-                <GeneralTeams :current-team-id="generalId" @backToTeamsList="handleBack"></GeneralTeams>
+                <GeneralTeams :equipos="id" @backToTeamsList="handleBack"></GeneralTeams>
             </div>
         </div>
     </div>
@@ -429,25 +298,22 @@ function handleBack() {
         </div>
         <div class="p-y-5 grid w-full mt-5 gap-8">
             <FloatLabel class="w-full">
-                <InputText id="team_title" class="bg-[#081e29] p-1 text-white w-full" size="large"
-                    v-model="teamTitle" />
-                <label for="team_title">Titulo del equipo</label>
+                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
+                <label for="over_label">Titulo del equipo</label>
             </FloatLabel>
             <FloatLabel class="w-full">
-                <InputText id="team_description" class="bg-[#081e29] p-1 text-white w-full" size="large"
-                    v-model="teamDescription" />
-                <label for="team_description">Descripción (Opcional)</label>
+                <InputText id="over_label" class="bg-[#081e29] p-1 text-white w-full" size="large" v-model="value1" />
+                <label for="over_label">Descripción</label>
             </FloatLabel>
             <FloatLabel class="w-full">
-                <MultiSelect v-model="selectedMembers" :options="availableUsers" optionLabel="name" display="chip"
+                <MultiSelect v-model="selectedCountries" :options="countries" optionLabel="name" display="chip"
                     class="bg-[#081e29] p-2 text-white w-full"
-                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]" placeholder="Selecciona integrantes"
-                    filter>
+                    overlayClass="bg-[#081e29] text-white p-1 hover:bg-[#06141b]">
                     <template #option="slotProps">
                         <div class="flex items-center h-1/6 p-2 text-gray-300">
                             <img :alt="slotProps.option.name"
-                                :src="slotProps.option.avatar_url || 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg'"
-                                :class="`flag flag-${slotProps.option.code ? slotProps.option.code.toLowerCase() : ''} mr-2 h-5 w-5 rounded-full object-cover`" />
+                                src="https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg"
+                                :class="`flag flag-${slotProps.option.code.toLowerCase()} mr-2 h-5 `" />
                             <div>{{ slotProps.option.name }}</div>
                         </div>
                     </template>
@@ -455,16 +321,106 @@ function handleBack() {
                         <i class="pi pi-users" />
                     </template>
                 </MultiSelect>
+                <label for="over_label">Integrantes seleccionados</label>
             </FloatLabel>
         </div>
         <div class="gap-4 flex justify-between mt-7">
-            <Button label="Crear nuevo equipo" size="small" @click="handleCreateTeam" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2
+            <Button label="Crear nuevo equipo" size="small" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
                 rounded-full hover:bg-[#9F86F9] hover:text-white" />
-            <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2
+            <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2 
                 rounded-full hover:bg-[#C13030] hover:text-white" />
         </div>
     </Dialog>
 
+    <Dialog  v-model:visible="visibleCreateRoom" modal class="w-1/4 h-fit"
+        :style="{ backgroundColor: transparent }" pt:root:class="!border-0 !bg-transparent">
+        <template #container="{ closeCallback }">
+            <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
+                <span class="text-gray-500"> Comenzar llamada </span>
+                <div class="relative w-fit h-fit">
+                    <Button icon="pi pi-phone" @click="handleCallClick"
+                        class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
+                    <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
+                        @click="handleCallClick"></i>
+                </div>
+                <Button icon="pi pi-times" @click="activeCallTeamId = false"
+                    class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
+            </div>
+        </template>
+    </Dialog>
+
+    <Dialog  v-model:visible="visibleVideoCall"
+        class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
+            content: {
+                class: 'p-4 h-full overflow-y-auto'
+            }
+        }">
+        <template #header>
+            <div class="flex justify-between items-center">
+                <div class="p-4 flex justify-between items-center">
+                    <span class="text-white mr-2 font-bold">Titulo de la llamada</span>
+                    <Button icon="pi pi-comment" @click="visibleRight = !visibleRight" severity="secondary"
+                        variant="text" rounded aria-label="Bookmark"
+                        :class="visibleRight ? 'text-[#129E82]' : 'text-[#646466]'"
+                        v-tooltip.bottom="'Abrir chat grupal'" />
+                    <Button icon="pi pi-microphone" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        @click="microphoneOn = !microphoneOn"
+                        :class="microphoneOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                    <Button icon="pi pi-camera" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        @click="cameraOn = !cameraOn" :class="cameraOn ? 'text-[#129E82]' : 'text-[#646466]'"
+                        class="text-[#129E82]" />
+                    <Button icon="pi pi-headphones" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        class="text-[#129E82]" @click="audioOn = !audioOn"
+                        :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                </div>
+                <div>
+                    <Button severity="secondary" @click="endCall" label="Colgar llamada" class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm 
+                                    font-light hover:bg-[#8a2222] hover:text-white" />
+                </div>
+                <div>
+                    <span class="text-white font-bold">Sala: {{ roomId }}</span>
+                    <Button label="Copiar ID" @click="copyToClipboard(roomId)" icon="pi pi-copy"
+                        class="text-xs text-[#9F86F9]" />
+                </div>
+            </div>
+        </template>
+        <div class="flex h-full">
+            <div v-if="visibleRight" class="relative z-10 bg-[#04293C] h-full w-1/3">
+                <div class="h-10/12">
+                    <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#081d27] p-4">
+                        <i class="pi pi-comment"></i>
+                        <div>
+                            <p class="chat-header-status">Chat grupal</p>
+                        </div>
+                    </div>
+                    <div class="h-full bg-[#030d11] p-4">
+                        <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
+                            class="message-item">
+                            <p class="message-text"
+                                :class="msg.user === username ? 'message-sent' : 'message-received'">
+                                {{ msg.message }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="bg-[#081d27] flex items-center justify-between p-4">
+                        <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
+                            class="bg-[#030d11] text-white p-2" />
+                        <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
+                            class="hover:text-[#129E82]" />
+                    </div>
+                </div>
+            </div>
+            <video ref="localVideoRef" autoplay muted v-if="cameraOn"
+                class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
+                Tu camara
+            </video>
+            <video ref="remoteVideoRef" autoplay
+                class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
+                <span class="text-xl"> En espera </span>
+                <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+            </video>
+        </div>
+    </Dialog>
 </template>
 
 <style>
