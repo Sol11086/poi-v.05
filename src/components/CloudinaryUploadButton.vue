@@ -7,6 +7,8 @@ import { ref, onMounted, defineProps, defineEmits } from 'vue';
 import Button from 'primevue/button'; // Usas PrimeVue según tu main.js
 import axios from 'axios'; // Ya es una dependencia
 
+const scriptLoaded = ref(!!window.cloudinary);
+
 const props = defineProps({
   buttonLabel: { type: String, default: 'Upload File' },
   icon: { type: String, default: null },
@@ -24,34 +26,71 @@ const API_BASE_URL = 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-f
 
 // Cargar script del widget de Cloudinary dinámicamente
 onMounted(() => {
-  if (!window.cloudinary) {
+  if (!scriptLoaded.value) {
+    // Prevenir múltiples cargas del script si el componente se monta varias veces
+    if (document.querySelector('script[src="https://upload-widget.cloudinary.com/global/all.js"]')) {
+        // Si ya existe el tag y window.cloudinary está disponible, marca como cargado
+        if (window.cloudinary) scriptLoaded.value = true;
+        // Si no, el script existente podría estar aún cargando, su `onload` (si tuviera) lo manejaría.
+        // O podemos añadir un pequeño poller aquí si es necesario, pero usualmente no lo es.
+        return;
+    }
     const script = document.createElement('script');
     script.src = "https://upload-widget.cloudinary.com/global/all.js";
     script.async = true;
-    script.onerror = () => console.error("Failed to load Cloudinary widget script.");
+    script.onload = () => {
+      console.log("Cloudinary widget script loaded successfully via onMounted.");
+      scriptLoaded.value = true;
+    };
+    script.onerror = () => {
+      console.error("Failed to load Cloudinary widget script.");
+      scriptLoaded.value = false; // O manejar de otra forma
+    };
     document.head.appendChild(script);
   }
 });
 
 const handleUpload = async () => {
-  if (!window.cloudinary) {
-    alert("Cloudinary widget is not loaded yet. Please try again in a moment.");
-    console.error("Cloudinary SDK (window.cloudinary) not available.");
+  if (!scriptLoaded.value || !window.cloudinary) {
+    alert("Cloudinary widget is not loaded yet. Please try again in a few moments.");
+    console.error("Cloudinary SDK (window.cloudinary) not available or script not fully processed.");
     return;
   }
+
   try {
-    const sigResponse = await axios.post(API_BASE_URL+'/api/cloudinary-signature', { // Endpoint del backend
+    console.log("Requesting signature with preset:", props.uploadPreset); // Log para depurar
+
+  const sigResponse = await axios.post(
+    `${API_BASE_URL}/api/cloudinary-signature`, // URL completa a tu backend
+    {
       upload_preset: props.uploadPreset,
       folder: props.folder,
       tags: props.tags
-    });
+    },
+    {
+      headers: {
+        'ngrok-skip-browser-warning': 'true', // ¡Añade esta cabecera!
+        // Si tu endpoint de firma requiere autenticación, asegúrate de incluir el token también:
+        // const token = localStorage.getItem('user_token');
+        // 'Authorization': token ? `Bearer ${token}` : undefined,
+      }
+    }
+  );
 
-    const { signature, timestamp, api_key, cloud_name } = sigResponse.data;
+  console.log("Signature response data:", sigResponse.data); // Log para depurar
+
+  const { signature, timestamp, api_key, cloud_name } = sigResponse.data;
+
+  if (!signature || !timestamp || !api_key || !cloud_name) {
+    console.error("Incomplete signature data received:", sigResponse.data);
+    emit('upload-error', { message: "Failed to get complete signature data from backend." });
+    return;
+  }
 
     // Destruir instancia anterior si existe para evitar problemas con parámetros cacheados
     if (widgetInstance.value) {
-        // widgetInstance.value.destroy(); // Puede que no sea necesario o no exista, verificar docs.
-        // Por ahora, simplemente creamos una nueva instancia.
+      // widgetInstance.value.destroy(); // Puede que no sea necesario o no exista, verificar docs.
+      // Por ahora, simplemente creamos una nueva instancia.
     }
 
     widgetInstance.value = window.cloudinary.createUploadWidget({
@@ -78,6 +117,8 @@ const handleUpload = async () => {
           file_type: result.info.resource_type + '/' + (result.info.format || result.info.resource_type), // ej: image/jpeg, video/mp4, raw/pdf
           original_filename: result.info.original_filename,
           bytes: result.info.bytes,
+          name: result.info.original_filename, // Añadido para consistencia con lo que espera chat.vue
+          size: result.info.bytes,       // Añadido para consistencia
           source: props.source, // Contexto
           relatedId: props.relatedId // ID contextual
         };
@@ -88,10 +129,10 @@ const handleUpload = async () => {
     });
 
     if (widgetInstance.value) {
-        widgetInstance.value.open();
+      widgetInstance.value.open();
     } else {
-        console.error("Failed to create Cloudinary widget instance.");
-        emit('upload-error', { message: "Failed to initialize upload widget." });
+      console.error("Failed to create Cloudinary widget instance.");
+      emit('upload-error', { message: "Failed to initialize upload widget." });
     }
 
   } catch (err) {

@@ -10,15 +10,15 @@ import cloudinaryPkg from 'cloudinary';
 
 // --- MANEJADORES GLOBALES DE ERRORES (PONER AL INICIO) ---
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('!!!! ATENCIÓN: Unhandled Rejection at:', promise, 'reason:', reason, 'Stack:', reason instanceof Error ? reason.stack : 'No stack');
-  // En producción, considera terminar el proceso después de loguear, ya que el estado puede ser inconsistente.
-  // process.exit(1); 
+    console.error('!!!! ATENCIÓN: Unhandled Rejection at:', promise, 'reason:', reason, 'Stack:', reason instanceof Error ? reason.stack : 'No stack');
+    // En producción, considera terminar el proceso después de loguear, ya que el estado puede ser inconsistente.
+    // process.exit(1); 
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('!!!! ATENCIÓN: Uncaught Exception:', error, 'Stack:', error.stack);
-  // Es crítico terminar el proceso aquí en producción después de loguear.
-  // process.exit(1); 
+    console.error('!!!! ATENCIÓN: Uncaught Exception:', error, 'Stack:', error.stack);
+    // Es crítico terminar el proceso aquí en producción después de loguear.
+    // process.exit(1); 
 });
 
 const app = express();
@@ -31,18 +31,18 @@ const allowedOrigins = [
 ];
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS: Origen no permitido: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-  allowedHeaders: "Content-Type, Authorization, ngrok-skip-browser-warning, X-Requested-With",
-  credentials: true,
-  optionsSuccessStatus: 204
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            console.warn(`CORS: Origen no permitido: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+    allowedHeaders: "Content-Type, Authorization, ngrok-skip-browser-warning, X-Requested-With",
+    credentials: true,
+    optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
@@ -71,9 +71,9 @@ const io = new Server(server, {
 // ------------------ CLOUDINARY -------------------
 const { config: cloudinaryConfig, uploader: cloudinaryUploader, utils: cloudinaryUtils } = cloudinaryPkg.v2;
 cloudinaryConfig({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'duhrxfco6',
-    api_key: process.env.CLOUDINARY_API_KEY || '727753889996879',
-    api_secret: process.env.CLOUDINARY_API_SECRET || 'ZFlju2cWLzqZyYZylwSTty4U0Wo',
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME = 'duhrxfco6',
+    api_key: process.env.CLOUDINARY_API_KEY = '727753889996879',
+    api_secret: process.env.CLOUDINARY_API_SECRET = 'ZFlju2cWLzqZyYZylwSTty4U0Wo',
     secure: true,
 });
 
@@ -86,6 +86,11 @@ app.post('/api/cloudinary-signature', (req, res) => { // Mantenido sin authentic
     if (tags && Array.isArray(tags)) params_to_sign.tags = tags.join(',');
     try {
         const signature = cloudinaryUtils.api_sign_request(params_to_sign, process.env.CLOUDINARY_API_SECRET);
+        // Logs para depuración en el backend:
+        console.log("Backend CLOUDINARY_CLOUD_NAME:", process.env.CLOUDINARY_CLOUD_NAME);
+        console.log("Backend CLOUDINARY_API_KEY:", process.env.CLOUDINARY_API_KEY);
+        console.log("Backend CLOUDINARY_API_SECRET:", process.env.CLOUDINARY_API_SECRET ? '***SECRET_SET***' : '!!!SECRET_NOT_SET!!!');
+
         res.json({ signature, timestamp, api_key: process.env.CLOUDINARY_API_KEY, cloud_name: process.env.CLOUDINARY_CLOUD_NAME });
     } catch (error) {
         console.error("Error generating Cloudinary signature:", error);
@@ -144,7 +149,7 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
                 if (transactionErr) return reject(transactionErr);
                 try {
                     await new Promise((resQ, rejQ) => connection.query('INSERT INTO teams (id, team_name, owner_id, image, caption, created_at) VALUES (?, ?, ?, ?, ?, NOW())', [newTeamId, team_name, owner_id, teamImagePath, description], (err) => err ? rejQ(err) : resQ(null)));
-                    
+
                     const memberInserts = [];
                     memberInserts.push(new Promise((resQ, rejQ) => connection.query('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [newTeamId, owner_id, 'admin'], (err) => err ? rejQ(err) : resQ(null))));
                     if (members && members.length > 0) {
@@ -225,7 +230,7 @@ app.post('/api/teams/:teamId/channels', authenticateToken, async (req, res) => {
 
     if (!channel_name) { if (!res.headersSent) return res.status(400).json({ success: false, error: "Channel name is required." }); return; }
     if (!routeTeamId) { if (!res.headersSent) return res.status(400).json({ success: false, error: "Team ID is required in path." }); return; }
-    
+
     try {
         const isAdminQuery = 'SELECT role FROM team_members WHERE team_id = ? AND user_id = ?';
         const adminResults = await new Promise((resolve, reject) => connection.query(isAdminQuery, [routeTeamId, userId], (e, r) => e ? reject(e) : resolve(r)));
@@ -233,7 +238,7 @@ app.post('/api/teams/:teamId/channels', authenticateToken, async (req, res) => {
         const proceedWithChannelCreation = async () => {
             const channelResult = await ManejarTeamChannel_Promise({ team_id: routeTeamId, channel_name });
             if (channelResult.success) {
-                const newChannelDetails = await new Promise((resolve, reject) => connection.query('SELECT id, team_id, channel_name, created_at FROM team_channels WHERE id = ?', [channelResult.channel_id], (e,r) => e ? reject(e) : resolve(r)));
+                const newChannelDetails = await new Promise((resolve, reject) => connection.query('SELECT id, team_id, channel_name, created_at FROM team_channels WHERE id = ?', [channelResult.channel_id], (e, r) => e ? reject(e) : resolve(r)));
                 if (newChannelDetails.length === 0) throw new Error("Channel processed but could not retrieve details.");
                 if (!res.headersSent) res.status(channelResult.created ? 201 : 200).json({ success: true, message: channelResult.created ? "Channel created." : "Channel exists.", channel: newChannelDetails[0], created: channelResult.created });
             } else {
@@ -242,7 +247,7 @@ app.post('/api/teams/:teamId/channels', authenticateToken, async (req, res) => {
         };
 
         if (adminResults.length === 0 || adminResults[0].role !== 'admin') {
-            const ownerResults = await new Promise((resolve, reject) => connection.query('SELECT owner_id FROM teams WHERE id = ?', [routeTeamId], (e,r) => e ? reject(e) : resolve(r)));
+            const ownerResults = await new Promise((resolve, reject) => connection.query('SELECT owner_id FROM teams WHERE id = ?', [routeTeamId], (e, r) => e ? reject(e) : resolve(r)));
             if (ownerResults.length === 0 || ownerResults[0].owner_id !== userId) {
                 if (!res.headersSent) return res.status(403).json({ success: false, error: "User is not an admin or owner." });
                 return;
@@ -346,7 +351,7 @@ app.post('/api/tasks/:taskId/submit', authenticateToken, async (req, res) => {
                         const newMultimediaId = generateVARCHAR15ID();
                         const multimediaQuery = `INSERT INTO multimedia (id, task_id, file_path, file_type, original_filename, bytes, public_id, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
                         const multimediaValues = [newMultimediaId, taskId, file_info.url, file_info.type, file_info.original_filename, file_info.bytes, file_info.public_id];
-                        
+
                         await new Promise((resQ, rejQ) => connection.query(multimediaQuery, multimediaValues, (err) => {
                             if (err) { console.error(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Error insertando en multimedia:`, JSON.stringify(err, Object.getOwnPropertyNames(err))); return rejQ(err); }
                             multimediaIdToStore = newMultimediaId;
@@ -359,7 +364,7 @@ app.post('/api/tasks/:taskId/submit', authenticateToken, async (req, res) => {
                     const submissionId = generateVARCHAR15ID();
                     const submissionQuery = `INSERT INTO task_submissions (id, task_id, user_id, multimedia_id, notes, submitted_at) VALUES (?, ?, ?, ?, ?, NOW())`;
                     const submissionValues = [submissionId, taskId, userId, multimediaIdToStore, notes];
-                    
+
                     await new Promise((resQ, rejQ) => connection.query(submissionQuery, submissionValues, (err) => {
                         if (err) { console.error(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Error insertando en task_submissions:`, JSON.stringify(err, Object.getOwnPropertyNames(err))); return rejQ(err); }
                         console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Entrega registrada en task_submissions con ID:`, submissionId);
@@ -368,7 +373,7 @@ app.post('/api/tasks/:taskId/submit', authenticateToken, async (req, res) => {
 
                     // 3. Verificar si la tarea tiene recompensa y actualizar puntos del usuario
                     const taskDetails = await new Promise((resQ, rejQ) => connection.query('SELECT has_reward FROM tasks WHERE id = ?', [taskId], (err, results) => (err ? rejQ(err) : resQ(results))));
-                    
+
                     if (taskDetails.length > 0 && taskDetails[0].has_reward) {
                         console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Tarea tiene recompensa. Actualizando puntos para usuario ${userId}.`);
                         const updateUserPointsQuery = 'UPDATE users SET reward_points = reward_points + 1 WHERE id = ?';
@@ -395,34 +400,34 @@ app.post('/api/tasks/:taskId/submit', authenticateToken, async (req, res) => {
                 }
             });
         })
-        .then(result => {
-            const message = result.awarded_reward ? "Task submitted successfully and reward point awarded!" : "Task submitted successfully.";
-            console.log(`[POST SUBMIT /api/tasks/${taskId}/submit] Respuesta: ${message}`);
-            if (!res.headersSent) {
-                res.status(201).json({ success: true, message: message, submission_id: result.submission_id });
-            } else {
-                 console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (éxito).`);
-            }
-        })
-        .catch(error => { // Error de la promesa de transacción (begin, commit, rollback, o queryError propagado)
-            console.error(`[POST SUBMIT /api/tasks/${taskId}/submit] Error en catch principal:`, JSON.stringify(error, Object.getOwnPropertyNames(error)), error.stack);
-            if (!res.headersSent) {
-                if (error.code === 'ER_DUP_ENTRY') {
-                    res.status(409).json({ success: false, error: "Task already submitted by this user." });
+            .then(result => {
+                const message = result.awarded_reward ? "Task submitted successfully and reward point awarded!" : "Task submitted successfully.";
+                console.log(`[POST SUBMIT /api/tasks/${taskId}/submit] Respuesta: ${message}`);
+                if (!res.headersSent) {
+                    res.status(201).json({ success: true, message: message, submission_id: result.submission_id });
                 } else {
-                    res.status(500).json({ success: false, error: error.message || "Failed to submit task due to server error." });
+                    console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (éxito).`);
                 }
-            } else {
-                console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (error catch).`);
-            }
-        });
+            })
+            .catch(error => { // Error de la promesa de transacción (begin, commit, rollback, o queryError propagado)
+                console.error(`[POST SUBMIT /api/tasks/${taskId}/submit] Error en catch principal:`, JSON.stringify(error, Object.getOwnPropertyNames(error)), error.stack);
+                if (!res.headersSent) {
+                    if (error.code === 'ER_DUP_ENTRY') {
+                        res.status(409).json({ success: false, error: "Task already submitted by this user." });
+                    } else {
+                        res.status(500).json({ success: false, error: error.message || "Failed to submit task due to server error." });
+                    }
+                } else {
+                    console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (error catch).`);
+                }
+            });
 
     } catch (mainError) { // Error síncrono antes de la promesa
         console.error(`[POST SUBMIT /api/tasks/${taskId}/submit] Error síncrono principal:`, JSON.stringify(mainError, Object.getOwnPropertyNames(mainError)), mainError.stack);
         if (!res.headersSent) {
             res.status(500).json({ success: false, error: "Unexpected server error during task submission." });
         } else {
-             console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (error síncrono principal).`);
+            console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (error síncrono principal).`);
         }
     }
 });
@@ -479,7 +484,7 @@ app.get('/api/manageable-teams', authenticateToken, (req, res) => {
 });
 
 // --- MANEJADORES DE CANALES (PROMESAS) ---
-async function ManejarTeamChannel_Promise({ team_id, channel_name }) { /* ... tu lógica ... */ 
+async function ManejarTeamChannel_Promise({ team_id, channel_name }) { /* ... tu lógica ... */
     return new Promise((resolve, reject) => {
         if (!team_id || !channel_name) return reject(new Error("team_id and channel_name are required."));
         connection.query('SELECT id FROM team_channels WHERE team_id = ? AND channel_name = ?', [team_id, channel_name], (err, results) => {
@@ -495,7 +500,7 @@ async function ManejarTeamChannel_Promise({ team_id, channel_name }) { /* ... tu
         });
     });
 }
-function ManejarPrivateChannel_Promise({ user1_id, user2_id }) { /* ... tu lógica ... */ 
+function ManejarPrivateChannel_Promise({ user1_id, user2_id }) { /* ... tu lógica ... */
     return new Promise((resolve, reject) => {
         if (!user1_id || !user2_id) return reject(new Error("user1_id and user2_id are required."));
         if (user1_id === user2_id) return reject(new Error("Cannot create private chat with oneself."));
@@ -513,6 +518,102 @@ function ManejarPrivateChannel_Promise({ user1_id, user2_id }) { /* ... tu lógi
         });
     });
 }
+
+// GET /api/users/contacts - Fetch users for contact list
+app.get('/api/users/contacts', authenticateToken, (req, res) => {
+    const currentUserId = req.user.id;
+    // Exclude current user, include necessary fields for chat sidebar and popover
+    const query = 'SELECT id, username, avatar, email, status, reward_points FROM users WHERE id != ? ORDER BY username ASC';
+    connection.query(query, [currentUserId], (err, results) => {
+        if (err) {
+            console.error("Error fetching contacts:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            return res.status(500).json({ success: false, error: "Error fetching contacts." });
+        }
+        res.status(200).json({ success: true, contacts: results });
+    });
+});
+
+// GET /api/my-teams-and-channels - Fetch teams, their channels, and light member info
+app.get('/api/my-teams-and-channels', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    if (!userId) return res.status(400).json({ success: false, error: "User ID not found." });
+
+    try {
+        const memberOfQuery = `
+            SELECT t.id, t.team_name, t.owner_id, t.image, t.caption 
+            FROM teams t 
+            JOIN team_members tm ON t.id = tm.team_id 
+            WHERE tm.user_id = ? 
+            ORDER BY t.team_name ASC`;
+        const teams = await new Promise((resolve, reject) => {
+            connection.query(memberOfQuery, [userId], (err, results) => err ? reject(err) : resolve(results));
+        });
+
+        if (teams.length === 0) return res.status(200).json({ success: true, teams: [] });
+
+        const teamsWithDetails = await Promise.all(teams.map(async (team) => {
+            const channelsQuery = 'SELECT id, team_id, channel_name, created_at FROM team_channels WHERE team_id = ? ORDER BY channel_name ASC';
+            const channels = await new Promise((resolve, reject) => {
+                connection.query(channelsQuery, [team.id], (err, chResults) => err ? reject(err) : resolve(chResults));
+            });
+            // No need to fetch members here, Popover can fetch members on demand using existing /api/teams/:teamId/members
+            return { ...team, channels, members: [] }; // Initialize members as empty
+        }));
+        res.status(200).json({ success: true, teams: teamsWithDetails });
+    } catch (error) {
+        console.error("Error in /api/my-teams-and-channels:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        res.status(500).json({ success: false, error: "Error fetching teams and channels." });
+    }
+});
+
+// POST /api/private-chats/room - Get or create a private chat room ID
+app.post('/api/private-chats/room', authenticateToken, async (req, res) => {
+    const user1_id = req.user.id; // Authenticated user
+    const { recipientId: user2_id } = req.body;
+
+    if (!user2_id) {
+        return res.status(400).json({ success: false, error: "Recipient ID is required." });
+    }
+    if (user1_id === user2_id) {
+        return res.status(400).json({ success: false, error: "Cannot create chat with oneself." });
+    }
+
+    try {
+        const chatResult = await ManejarPrivateChannel_Promise({ user1_id, user2_id }); // Uses existing helper
+        if (chatResult.success) {
+            res.status(chatResult.created ? 201 : 200).json({
+                success: true,
+                chat_id: chatResult.chat_id,
+                created: chatResult.created,
+            });
+        } else {
+            throw new Error(chatResult.error || "Failed to get/create private chat room.");
+        }
+    } catch (error) {
+        console.error("Error in POST /api/private-chats/room:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        res.status(500).json({ success: false, error: error.message || "Server error." });
+    }
+});
+
+// GET /api/users/:userId - Fetch full details for a specific user
+app.get('/api/users/:userId', authenticateToken, (req, res) => {
+    const { userId } = req.params;
+    const query = 'SELECT id, username, email, avatar, status, reward_points FROM users WHERE id = ?';
+    connection.query(query, [userId], (err, results) => {
+        if (err) {
+            console.error(`Error fetching user ${userId}:`, JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            return res.status(500).json({ success: false, error: "Database error." });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ success: false, error: "User not found." });
+        } if (results.length > 0) {
+            res.status(200).json({ success: true, user: results[0] });
+        } else {
+            res.status(404).json({ success: false, error: "User not found." });
+        }
+        //res.status(200).json({ success: true, user: results[0] });
+    });
+});
 
 //---------------------Socket.io-------------------------
 io.on("connection", (socket) => {
@@ -578,9 +679,9 @@ io.on("connection", (socket) => {
             const userResults = await new Promise((resolve, reject) => connection.query('SELECT username FROM users WHERE id = ?', [sender_id], (err, res) => err ? reject(err) : resolve(res)));
             const username = (userResults.length === 0) ? 'Desconocido' : userResults[0].username;
             const newMessageForRoom = {
-                id: messageId, user: { id: sender_id, username }, 
+                id: messageId, user: { id: sender_id, username },
                 message: file_info ? (message || `Archivo: ${file_info.original_filename || file_info.name}`) : message,
-                room: actualRoomIdForEmit, roomType, created_at: createdAt, 
+                room: actualRoomIdForEmit, roomType, created_at: createdAt,
                 time: createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 file_info: file_info || null,
             };
@@ -595,7 +696,7 @@ io.on("connection", (socket) => {
 
     socket.on("joinAllRooms", (roomIds) => {
         if (Array.isArray(roomIds)) {
-            roomIds.forEach((room) => { if(room) socket.join(room); });
+            roomIds.forEach((room) => { if (room) socket.join(room); });
         } else if (typeof roomIds === 'string' && roomIds) {
             socket.join(roomIds);
         }
@@ -609,7 +710,7 @@ io.on("connection", (socket) => {
         if (roomType === 'private') queryMessages = `${baseSelect} WHERE m.chat_id = ? ORDER BY m.created_at ASC`;
         else if (roomType === 'channel') queryMessages = `${baseSelect} WHERE m.team_channel_id = ? ORDER BY m.created_at ASC`;
         else { socket.emit("previousMessages", []); return; }
-        
+
         connection.query(queryMessages, [room], (err, results) => {
             if (err) { console.error("Error loadMessages:", JSON.stringify(err, Object.getOwnPropertyNames(err))); socket.emit("previousMessages", []); return; }
             const formattedMessages = results.map(msg => ({
@@ -629,15 +730,15 @@ app.use((err, req, res, next) => {
     console.error("--- ERROR EXPRESS NO MANEJADO ---");
     console.error("Ruta:", req.method, req.originalUrl);
     // Evitar JSON.stringify en el error completo si puede ser circular o muy grande
-    console.error("Mensaje Error:", err.message); 
+    console.error("Mensaje Error:", err.message);
     console.error("Stack:", err.stack);
-    
+
     if (res.headersSent) {
         console.error("Manejador de errores Express: Cabeceras ya enviadas.");
         return next(err); // Delegar al manejador por defecto de Express
     }
     res.status(err.status || 500).json({
-        success: false, 
+        success: false,
         error: err.message || 'Error interno del servidor.'
     });
 });

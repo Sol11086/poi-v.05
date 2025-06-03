@@ -30,7 +30,7 @@ export default defineConfig({
         changeOrigin: true, // Necesario para virtual hosted sites
         secure: false, // Si tu backend no usa HTTPS en desarrollo
         // Puedes añadir rewrite si necesitas quitar /api del path antes de enviarlo al backend
-        rewrite: (path) => path.replace(/^\/api/, '')
+        //rewrite: (path) => path.replace(/^\/api/, '')
       }
     },
     //-- ARCHIVOS DONDE SE DEBAN CAMBIAR LA URL--
