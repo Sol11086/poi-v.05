@@ -33,7 +33,8 @@ export default {
     async handleLogin() {
       try {
         // dafault http://localhost:3000/login -- Cambiar por el puerto que se esté usando (ngrok o vite)
-        const response = await axios.post('https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app/login', {
+        // const response = await axios.post('https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app/login', {
+        const response = await axios.post('http://localhost:3000/login', {
           username: this.username,
           password: this.password,
         });

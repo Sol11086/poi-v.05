@@ -26,7 +26,7 @@ export default defineConfig({
     cors: true,
     proxy: {
       '/api': { // Cualquier petición que comience con /api
-        target: 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app', // Dirígela a tu servidor Express
+        // target: 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app', // Dirígela a tu servidor Express
         changeOrigin: true, // Necesario para virtual hosted sites
         secure: false, // Si tu backend no usa HTTPS en desarrollo
         // Puedes añadir rewrite si necesitas quitar /api del path antes de enviarlo al backend

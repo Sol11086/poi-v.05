@@ -100,7 +100,7 @@ app.post('/api/cloudinary-signature', (req, res) => { // Mantenido sin authentic
 
 // ---------- CONEXION A LA BASE DE DATOS ----------
 const connection = mysql.createConnection({
-    host: 'localhost', user: 'root', password: '', database: 'db_poi_v1', port: 33065
+    host: 'localhost', user: 'root', password: '12345', database: 'db_poi_v1', port: 3306
 });
 connection.connect((err) => {
     if (err) { console.error('Error al conectar a la base de datos:', err.stack); return; }
