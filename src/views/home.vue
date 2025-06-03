@@ -7,6 +7,8 @@ import Homeworks from "@/components/homeworks.vue";
 import Teams from "@/components/teams.vue";
 import { parseJwt } from '@/utils/jwt.js';
 import UseProfile from "../components/useProfile.vue";
+import { isEncryptionGloballyEnabled } from '@/utils/globalState'
+import InputSwitch from 'primevue/inputswitch'; // Registrado globalmente
 
 const visibleNotis = ref(false);
 const visibleChat = ref(false);
@@ -67,7 +69,7 @@ onMounted(() => {
 function logout() {
   localStorage.removeItem('user_token');
   localStorage.removeItem('username');
-  window.location.href="login";
+  window.location.href = "login";
 }
 
 const selectedUserProfile = ref(null)
@@ -94,6 +96,10 @@ function resetView() {
 
       <template #end>
         <div class="flex gap-4 items-center ml-auto p-4">
+          <div class="flex align-items-center gap-2 mr-4 p-inputswitch-sm"> <label for="encryptionToggleMenuBar"
+              class="mr-2 text-white">Cifrar Mensajes</label>
+          </div>
+          <InputSwitch inputId="encryptionToggleMenuBar" v-model="isEncryptionGloballyEnabled" />
           <Button icon="pi pi-gift" variant="text" rounded size="small" aria-label="Filter" class="filter-button"
             @click="toggle" />
           <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none' }">

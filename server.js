@@ -67,7 +67,65 @@ const server = createServer(app);
 const io = new Server(server, {
     cors: corsOptions // Aplicar la misma configuración CORS detallada a Socket.IO
 });
+// --------------------- ENCRIPTACIÓN ------------------------
+const ALGORITHM = 'aes-256-gcm';
 
+const ENCRYPTION_KEY_STRING = process.env.ENCRYPTION_KEY = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
+let ENCRYPTION_KEY;
+
+if (!ENCRYPTION_KEY_STRING) {
+    console.error("!!!! ATENCIÓN: ENCRYPTION_KEY no está definida en el archivo .env. El cifrado no funcionará.");
+    // Podrías optar por salir del proceso si la clave es crítica para el funcionamiento
+    // process.exit(1);
+} else if (ENCRYPTION_KEY_STRING.length === 64) { // Asumimos que es una clave hexadecimal de 32 bytes
+    ENCRYPTION_KEY = Buffer.from(ENCRYPTION_KEY_STRING, 'hex');
+    if (ENCRYPTION_KEY.length !== 32) {
+        console.error("!!!! ATENCIÓN: ENCRYPTION_KEY (hex) no tiene la longitud correcta de 32 bytes después de la conversión. Se esperaba 64 caracteres hexadecimales.");
+        process.exit(1);
+    }
+} else if (ENCRYPTION_KEY_STRING.length === 32) { // Asumimos que es una clave de texto de 32 bytes
+    ENCRYPTION_KEY = Buffer.from(ENCRYPTION_KEY_STRING, 'utf-8');
+} else {
+    console.error("!!!! ATENCIÓN: ENCRYPTION_KEY debe ser una cadena de 32 bytes o una cadena hexadecimal de 64 caracteres.");
+    process.exit(1);
+}
+
+
+function encrypt(text) {
+    if (!text || !ENCRYPTION_KEY) return { encrypted: text, iv: null, authTag: null, was_encrypted: false }; // Devuelve original si no hay clave o texto
+    try {
+        const iv = crypto.randomBytes(12); // Para GCM, 12 bytes es lo recomendado
+        const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+        let encrypted = cipher.update(text, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        const authTag = cipher.getAuthTag().toString('hex');
+        return {
+            encrypted,
+            iv: iv.toString('hex'),
+            authTag,
+            was_encrypted: true
+        };
+    } catch (error) {
+        console.error("Error al cifrar:", error);
+        return { encrypted: text, iv: null, authTag: null, was_encrypted: false }; // Devuelve original en caso de error
+    }
+}
+
+function decrypt(encryptedText, ivHex, authTagHex) {
+    if (!encryptedText || !ivHex || !authTagHex || !ENCRYPTION_KEY) return encryptedText; // Devuelve original si falta algo o no hay clave
+    try {
+        const iv = Buffer.from(ivHex, 'hex');
+        const authTag = Buffer.from(authTagHex, 'hex');
+        const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (error) {
+        console.error("Error al descifrar:", error.message, "(Probablemente etiqueta de autenticación incorrecta o IV)");
+        return "[Mensaje cifrado no pudo ser descifrado]"; // O manejar de otra forma
+    }
+}
 // ------------------ CLOUDINARY -------------------
 const { config: cloudinaryConfig, uploader: cloudinaryUploader, utils: cloudinaryUtils } = cloudinaryPkg.v2;
 cloudinaryConfig({
@@ -619,7 +677,7 @@ app.get('/api/users/:userId', authenticateToken, (req, res) => {
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
-    socket.on("sendMessage", async ({ room, message, sender_id, receiver_id, team_id, channel_name, roomType, file_info }) => {
+    socket.on("sendMessage", async ({ room, message, sender_id, receiver_id, team_id, channel_name, roomType, file_info, is_encryption_requested_by_client }) => { // MODIFICADO: Se añade is_encryption_requested_by_client
         if (!sender_id || !(message || file_info) || !roomType) {
             return socket.emit('messageError', { message: 'Faltan datos esenciales para el mensaje.' });
         }
@@ -628,6 +686,31 @@ io.on("connection", (socket) => {
         let chatIdValue = null;
         let teamChannelIdValue = null;
         let actualRoomIdForEmit = room;
+
+        // Determinar el contenido real del mensaje y el mensaje original para emitir
+        let originalMessageContentForEmit = file_info ? (message || `Archivo: ${file_info.original_filename || file_info.name}`) : message;
+        let contentForDb = originalMessageContentForEmit; // Por defecto, el contenido para la DB es el original
+
+        let iv_to_db = null;
+        let auth_tag_to_db = null;
+        let store_as_encrypted = !!is_encryption_requested_by_client; // Convertir a booleano
+
+        if (store_as_encrypted && contentForDb && ENCRYPTION_KEY) { // Solo cifrar si se solicita, hay contenido Y hay clave
+            const encryptionResult = encrypt(contentForDb); // Llama a tu función encrypt
+            if (encryptionResult.was_encrypted) {
+                contentForDb = encryptionResult.encrypted;
+                iv_to_db = encryptionResult.iv;
+                auth_tag_to_db = encryptionResult.authTag;
+            } else {
+                // Si el cifrado falló o no se realizó (ej. ENCRYPTION_KEY no estaba lista), se guarda como no cifrado
+                console.warn(`[SOCKET SENDMSG] Cifrado solicitado pero no se pudo realizar para mensaje ID (potencial): ${messageId}. Guardando como texto plano.`);
+                store_as_encrypted = false; // Marcar como no cifrado en la DB
+            }
+        } else if (store_as_encrypted && !ENCRYPTION_KEY) {
+            console.warn(`[SOCKET SENDMSG] Cifrado solicitado pero ENCRYPTION_KEY no está configurada. Guardando como texto plano para mensaje ID (potencial): ${messageId}.`);
+            store_as_encrypted = false;
+        }
+
 
         try {
             await new Promise((resolveTx, rejectTx) => {
@@ -653,20 +736,34 @@ io.on("connection", (socket) => {
                             throw new Error('Tipo de sala no válido.');
                         }
 
-                        const msgContent = file_info ? (message || `Archivo: ${file_info.original_filename || file_info.name}`) : message;
-                        const msgQuery = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES (?, ?, ?, ?, ?, ?)';
-                        const msgValues = [messageId, sender_id, chatIdValue, teamChannelIdValue, msgContent, createdAt];
-                        await new Promise((resQ, rejQ) => connection.query(msgQuery, msgValues, (e) => e ? rejQ(e) : resQ(null)));
+                        const msgQuery = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at, is_encrypted, iv, auth_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                        const msgValues = [messageId, sender_id, chatIdValue, teamChannelIdValue, contentForDb, createdAt, store_as_encrypted, iv_to_db, auth_tag_to_db];
+                        await new Promise((resQ, rejQ) => connection.query(msgQuery, msgValues, (e) => {
+                            if (e) {
+                                console.error("[SOCKET SENDMSG TXN] Error insertando mensaje:", JSON.stringify(e, Object.getOwnPropertyNames(e)));
+                                return rejQ(e);
+                            }
+                            resQ(null);
+                        }));
 
                         if (file_info && file_info.url) {
                             const mediaId = generateVARCHAR15ID();
                             const mediaQuery = 'INSERT INTO multimedia (id, message_id, file_path, file_type, original_filename, bytes, public_id, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
                             const mediaValues = [mediaId, messageId, file_info.url, file_info.type, file_info.original_filename || file_info.name, file_info.bytes, file_info.public_id, createdAt];
-                            await new Promise((resQ, rejQ) => connection.query(mediaQuery, mediaValues, (e) => e ? rejQ(e) : resQ(null)));
+                            await new Promise((resQ, rejQ) => connection.query(mediaQuery, mediaValues, (e) => {
+                                if (e) {
+                                    console.error("[SOCKET SENDMSG TXN] Error insertando multimedia:", JSON.stringify(e, Object.getOwnPropertyNames(e)));
+                                    return rejQ(e);
+                                }
+                                resQ(null);
+                            }));
                         }
 
                         connection.commit(commitErr => {
-                            if (commitErr) return connection.rollback(() => rejectTx(commitErr));
+                            if (commitErr) {
+                                console.error("[SOCKET SENDMSG TXN] Error en commit:", JSON.stringify(commitErr, Object.getOwnPropertyNames(commitErr)));
+                                return connection.rollback(() => rejectTx(commitErr));
+                            }
                             resolveTx(null);
                         });
                     } catch (innerError) {
@@ -678,15 +775,20 @@ io.on("connection", (socket) => {
 
             const userResults = await new Promise((resolve, reject) => connection.query('SELECT username FROM users WHERE id = ?', [sender_id], (err, res) => err ? reject(err) : resolve(res)));
             const username = (userResults.length === 0) ? 'Desconocido' : userResults[0].username;
+
             const newMessageForRoom = {
-                id: messageId, user: { id: sender_id, username },
-                message: file_info ? (message || `Archivo: ${file_info.original_filename || file_info.name}`) : message,
-                room: actualRoomIdForEmit, roomType, created_at: createdAt,
+                id: messageId,
+                user: { id: sender_id, username },
+                message: originalMessageContentForEmit, // Siempre se emite el mensaje original/descifrado
+                room: actualRoomIdForEmit,
+                roomType,
+                created_at: createdAt,
                 time: createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 file_info: file_info || null,
+                is_encrypted: store_as_encrypted, // Se envía la bandera para que el UI sepa si se guardó cifrado
             };
             io.to(actualRoomIdForEmit).emit("receiveMessage", newMessageForRoom);
-            console.log(`[SOCKET SENDMSG] Mensaje enviado a sala ${actualRoomIdForEmit}`);
+            console.log(`[SOCKET SENDMSG] Mensaje enviado a sala ${actualRoomIdForEmit}. Cifrado en DB: ${store_as_encrypted}`);
 
         } catch (error) {
             console.error("[SOCKET SENDMSG] Error catch principal:", JSON.stringify(error, Object.getOwnPropertyNames(error)), error.stack);
@@ -704,20 +806,66 @@ io.on("connection", (socket) => {
     });
 
     socket.on("loadMessages", ({ room, roomType }) => {
-        if (!room || !roomType) { socket.emit("previousMessages", []); return; }
+        if (!room || !roomType) {
+            socket.emit("previousMessages", []);
+            return;
+        }
         let queryMessages;
-        const baseSelect = `SELECT m.id, m.content, m.created_at, m.sender_id, u.username, md.id as multimedia_id, md.file_path, md.file_type, md.original_filename, md.bytes, md.public_id FROM messages m JOIN users u ON m.sender_id = u.id LEFT JOIN multimedia md ON m.id = md.message_id`;
-        if (roomType === 'private') queryMessages = `${baseSelect} WHERE m.chat_id = ? ORDER BY m.created_at ASC`;
-        else if (roomType === 'channel') queryMessages = `${baseSelect} WHERE m.team_channel_id = ? ORDER BY m.created_at ASC`;
-        else { socket.emit("previousMessages", []); return; }
+        // MODIFICADO: Se añaden m.is_encrypted, m.iv, m.auth_tag al SELECT
+        const baseSelect = `
+        SELECT m.id, m.content, m.created_at, m.sender_id, u.username, 
+               md.id as multimedia_id, md.file_path, md.file_type, 
+               md.original_filename, md.bytes, md.public_id,
+               m.is_encrypted, m.iv, m.auth_tag 
+        FROM messages m 
+        JOIN users u ON m.sender_id = u.id 
+        LEFT JOIN multimedia md ON m.id = md.message_id`;
+
+        if (roomType === 'private') {
+            queryMessages = `${baseSelect} WHERE m.chat_id = ? ORDER BY m.created_at ASC`;
+        } else if (roomType === 'channel') {
+            queryMessages = `${baseSelect} WHERE m.team_channel_id = ? ORDER BY m.created_at ASC`;
+        } else {
+            socket.emit("previousMessages", []);
+            return;
+        }
 
         connection.query(queryMessages, [room], (err, results) => {
-            if (err) { console.error("Error loadMessages:", JSON.stringify(err, Object.getOwnPropertyNames(err))); socket.emit("previousMessages", []); return; }
-            const formattedMessages = results.map(msg => ({
-                id: msg.id, user: { id: msg.sender_id, username: msg.username }, message: msg.content,
-                room, roomType, created_at: msg.created_at, time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                file_info: msg.multimedia_id ? { id: msg.multimedia_id, url: msg.file_path, type: msg.file_type, name: msg.original_filename, size: msg.bytes, public_id: msg.public_id } : null
-            }));
+            if (err) {
+                console.error("Error loadMessages:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+                socket.emit("previousMessages", []);
+                return;
+            }
+            const formattedMessages = results.map(msg => {
+                let displayMessage = msg.content;
+                // MODIFICADO: Lógica de descifrado
+                if (msg.is_encrypted && msg.content && msg.iv && msg.auth_tag && ENCRYPTION_KEY) { // Solo descifrar si es necesario Y HAY CLAVE
+                    displayMessage = decrypt(msg.content, msg.iv, msg.auth_tag); // Llama a tu función decrypt
+                } else if (msg.is_encrypted && !ENCRYPTION_KEY) {
+                    console.warn(`[LOADMESSAGES] Mensaje ID ${msg.id} está cifrado pero ENCRYPTION_KEY no está configurada. No se puede descifrar.`);
+                    displayMessage = "[Mensaje cifrado - No se puede descifrar (clave no configurada)]";
+                }
+
+
+                return {
+                    id: msg.id,
+                    user: { id: msg.sender_id, username: msg.username },
+                    message: displayMessage, // Contenido original o descifrado
+                    room,
+                    roomType,
+                    created_at: msg.created_at,
+                    time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    file_info: msg.multimedia_id ? {
+                        id: msg.multimedia_id,
+                        url: msg.file_path,
+                        type: msg.file_type,
+                        name: msg.original_filename,
+                        size: msg.bytes,
+                        public_id: msg.public_id
+                    } : null,
+                    is_encrypted: !!msg.is_encrypted, // Para el UI
+                };
+            });
             socket.emit("previousMessages", formattedMessages);
         });
     });
