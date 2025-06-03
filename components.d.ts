@@ -21,6 +21,8 @@ declare module 'vue' {
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     Homeworks: typeof import('./src/components/homeworks.vue')['default']
     InputText: typeof import('primevue/inputtext')['default']
+    ManualCldImage: typeof import('./src/components/ManualCldImage.vue')['default']
+    ManualCldVideo: typeof import('./src/components/ManualCldVideo.vue')['default']
     Menubar: typeof import('primevue/menubar')['default']
     MultiSelect: typeof import('primevue/multiselect')['default']
     Notifications: typeof import('./src/components/notifications.vue')['default']
@@ -31,7 +33,7 @@ declare module 'vue' {
     Teams: typeof import('./src/components/teams.vue')['default']
     UseProfile: typeof import('./src/components/useProfile.vue')['default']
   }
-  export interface ComponentCustomProperties {
+  export interface GlobalDirectives {
     Tooltip: typeof import('primevue/tooltip')['default']
   }
 }

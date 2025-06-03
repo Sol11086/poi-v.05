@@ -3,7 +3,8 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import 'primeicons/primeicons.css'
 import socket from "@/utils/socket.js";
 import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
-import { CldImage, CldVideo } from '@cloudinary/vue'
+import ManualCldImage from '@/components/ManualCldImage.vue'; // Ajusta la ruta si es necesario
+import ManualCldVideo from '@/components/ManualCldVideo.vue';
 import { parseJwt } from '@/utils/jwt.js';
 
 socket.on("connect", () => {
@@ -140,7 +141,11 @@ onMounted(() => {
     socket.emit("joinAllRooms", roomIds);
 
     socket.on("receiveMessage", (message) => {
-        console.log(message);
+        console.log('Mensaje RECIBIDO en el cliente:', JSON.stringify(message, null, 2)); // Para ver la estructura completa
+        if (message.file_info) {
+            console.log('Detalles de file_info RECIBIDO:', JSON.stringify(message.file_info, null, 2));
+            console.log('Tipo de recurso determinado por getResourceType:', getResourceType(message.file_info));
+        }
         //senderID = message.user.id;
         //senderuser= message.user.username;
         //Fecha = message.created_at;
@@ -197,12 +202,12 @@ function goToProfile() {
                     <!-- Cloudinary Media-->
                     <div v-if="msg.file_info" class="file-message-content">
                         <p class="message-content">{{ msg.message }}</p>
-                        <cld-image v-if="getResourceType(msg.file_info) === 'image'" :cloudName="cldCloudName"
+                        <manual-cld-image v-if="getResourceType(msg.file_info) === 'image'" :cloudName="cldCloudName"
                             :public-id="msg.file_info.public_id" width="300" crop="limit" alt="Imagen adjunta"
                             class="uploaded-multimedia my-2" />
 
-                        <cld-video v-else-if="getResourceType(msg.file_info) === 'video'" :cloudName="cldCloudName"
-                            :public-id="msg.file_info.public_id" controls width="400"
+                        <manual-cld-video v-else-if="getResourceType(msg.file_info) === 'video'"
+                            :cloudName="cldCloudName" :public-id="msg.file_info.public_id" controls width="400"
                             class="uploaded-multimedia my-2" />
 
                         <a v-else-if="getResourceType(msg.file_info) === 'raw' && msg.file_info.url"
@@ -227,7 +232,7 @@ function goToProfile() {
                 <div class="p-2"> <!--Cloudinary Button-->
                     <CloudinaryUploadButton :buttonLabel="null" icon="pi pi-paperclip" :uploadPreset="chatUploadPreset"
                         :folder="chatFolder" :tags="['chat', 'private', selectedChat?.id]" source="chat"
-                        :relatedId="currentChatId" @upload-success="handleChatFileUpload"
+                        :relatedId="selectedChat?.id" @upload-success="handleChatFileUpload"
                         @upload-error="handleChatUploadError" class="ml-2" />
                 </div>
                 <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."

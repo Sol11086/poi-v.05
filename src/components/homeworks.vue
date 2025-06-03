@@ -82,12 +82,12 @@
                         <div
                             class="flex flex-col text-[#9F86F9] sm:flex-row justify-between items-center gap-3 pt-3 border-t border-gray-700 m-3">
                             <CloudinaryUploadButton buttonLabel="Seleccionar Archivo para Tarea"
-                                :uploadPreset="taskUploadPreset" :folder="taskSubmissionFolder"
-                                :tags="['task_submission', currentTask ? `task-${currentTask.id}` : 'new_task']"
-                                source="task_submission" :relatedId="currentTask ? currentTask.id : null"
-                                @upload-success="handleTaskFileUploaded" @upload-error="handleTaskUploadError" />
-                            <div v-if="uploadedTaskFileInfo" class="mt-2 text-sm">
-                                Archivo seleccionado: {{ uploadedTaskFileInfo.original_filename }} ({{
+                                :uploadPreset="taskUploadPreset" :folder="getTaskSubmissionFolder(t)"
+                                :tags="['task_submission', `task-${t.id}`]" source="task_submission" :relatedId="t.id"
+                                @upload-success="(fileData) => handleTaskFileUploaded(fileData, t)" @upload-error="handleTaskUploadError" />
+                            <div v-if="uploadedTaskFileInfo && currentTaskForFileUpload === t.id"
+                                class="mt-2 text-sm text-white"> Archivo seleccionado: {{
+                                uploadedTaskFileInfo.original_filename }} ({{
                                     (uploadedTaskFileInfo.bytes / 1024).toFixed(2) }} KB)
                             </div>
                             <div class="flex gap-3">
@@ -292,66 +292,88 @@ const submitTaskDialogVisible = ref(false);
 
 // ==============================================
 const props = defineProps({
-  currentTask: Object, // La tarea actual para la que se está haciendo la entrega
+    currentTask: Object, // La tarea actual para la que se está haciendo la entrega
 });
+const taskUploadPreset = 'vue_task_uploads'; // Ya lo tienes
+const uploadedTaskFileInfo = ref(null);
+const submissionNotes = ref(''); // Ya lo tienes, pero se usará en el diálogo de entrega
 
-const taskUploadPreset = import.meta.env.VITE_CLOUDINARY_TASK_UPLOAD_PRESET;
-const uploadedTaskFileInfo = ref(null); // Almacena la info del archivo subido a Cloudinary
-const submissionNotes = ref(''); // Para las notas de la entrega
-// const isFileRequiredForTask = ref(true); // Define si el archivo es obligatorio
+const currentTaskForFileUpload = ref(null); // Nuevo: para saber a qué tarea pertenece uploadedTaskFileInfo
 
-const taskSubmissionFolder = computed(() => {
-  return props.currentTask ? `tasks/${props.currentTask.id}/submissions` : 'tasks/submissions/orphaned';
-});
+// Nueva función para el folder dinámico
+const getTaskSubmissionFolder = (taskItem) => {
+  return taskItem ? `tasks/${taskItem.id}/submissions` : 'tasks/submissions/general';
+};
 
-const handleTaskFileUploaded = (fileData) => {
-  console.log('File uploaded for task submission:', fileData);
+const handleTaskFileUploaded = (fileData, taskItem) => { // Modificado para aceptar taskItem
+  console.log(`Archivo subido para la tarea ${taskItem?.id || 'desconocida'}:`, fileData);
   uploadedTaskFileInfo.value = fileData;
+  currentTaskForFileUpload.value = taskItem?.id; // Asocia el archivo con el ID de esta tarea
 };
 
 const handleTaskUploadError = (error) => {
-  console.error("Task submission file upload error:", error);
-  alert(`Error uploading file: ${error.message || 'Unknown error'}`);
+  console.error("Error en la subida del archivo de tarea:", error);
+  alert(`Error al subir archivo: ${error.message || 'Error desconocido'}`);
   uploadedTaskFileInfo.value = null;
+  currentTaskForFileUpload.value = null;
 };
 
-const submitHomework = async () => {
-  if (!props.currentTask || !props.currentTask.id) {
-    alert("No se ha seleccionado una tarea para la entrega.");
-    return;
+// Ref para el diálogo de entrega y la tarea que se está entregando
+const taskToSubmitForDialog = ref(null); // Almacenará { task: Object, fileInfo: Object, notes: String }
+
+const promptSubmitTask = (taskItem) => {
+  taskToSubmitForDialog.value = {
+    task: taskItem,
+    // Captura el archivo que se asoció con esta tarea específica,
+    // o el último archivo subido si coincide con la tarea actual.
+    fileInfo: (currentTaskForFileUpload.value === taskItem.id) ? uploadedTaskFileInfo.value : null,
+    notes: '' // Inicializa las notas para el diálogo
+  };
+  submitTaskDialogVisible.value = true;
+};
+
+// En el Dialog para la entrega (submitTaskDialogVisible):
+// Asegúrate que el v-model para las notas sea: v-model="taskToSubmitForDialog.notes"
+// <Textarea id="submissionNotes" v-model="taskToSubmitForDialog.notes" ... />
+
+const executeSubmitTask = async () => {
+  if (!taskToSubmitForDialog.value || !taskToSubmitForDialog.value.task) return;
+
+  const token = getToken(); // Asegúrate que getToken() esté funcionando y currentUserId.value se popule
+  if (!token) {
+      alert("Error de autenticación. Por favor, inicia sesión de nuevo.");
+      return;
   }
-  // if (isFileRequiredForTask.value && !uploadedTaskFileInfo.value) {
-  //   alert("Por favor, selecciona un archivo para la entrega.");
-  //   return;
-  // }
 
   const payload = {
-    notes: submissionNotes.value,
-    // Si uploadedTaskFileInfo es null, el backend debería manejarlo (ej. entrega sin archivo)
-    file_info: uploadedTaskFileInfo.value
+    notes: taskToSubmitForDialog.value.notes,
+    file_info: taskToSubmitForDialog.value.fileInfo // Puede ser null si no se seleccionó archivo para esta tarea
   };
 
   try {
-    // El endpoint del backend para /api/tasks/:taskId/submit debe ser modificado
-    const response = await axios.post(`/api/tasks/${props.currentTask.id}/submit`, payload, {
-         headers: { 'Authorization': `Bearer ${authStore.token}` } // Asegúrate de enviar el token
+    const response = await axios.post(`/api/tasks/${taskToSubmitForDialog.value.task.id}/submit`, payload, {
+      headers: { Authorization: `Bearer ${token}` }
     });
 
     if (response.data.success) {
-      alert("Tarea entregada exitosamente!");
-      // Resetear estado, cerrar diálogo, refrescar lista de tareas, etc.
-      uploadedTaskFileInfo.value = null;
-      submissionNotes.value = '';
-      // emit('submission-successful');
+      alert("¡Tarea entregada exitosamente!");
+      fetchTasksForTeam(taskToSubmitForDialog.value.task.team_id); // Refrescar la lista de tareas
+      submitTaskDialogVisible.value = false;
+      
+      // Limpiar solo si el archivo entregado era el que estaba en uploadedTaskFileInfo
+      if (taskToSubmitForDialog.value.fileInfo && uploadedTaskFileInfo.value && taskToSubmitForDialog.value.fileInfo.public_id === uploadedTaskFileInfo.value.public_id) {
+          uploadedTaskFileInfo.value = null;
+          currentTaskForFileUpload.value = null;
+      }
+      taskToSubmitForDialog.value = null; // Resetear la tarea para el diálogo
     } else {
       alert(`Error al entregar la tarea: ${response.data.error}`);
     }
   } catch (error) {
-    console.error("Error submitting homework:", error.response ? error.response.data : error.message);
+    console.error("Error submitting task:", error.response ? error.response.data : error.message);
     alert(`Error del servidor al entregar la tarea: ${error.response?.data?.error || error.message}`);
   }
 };
-
 // ==============================================
 
 const initialTaskState = () => ({
@@ -560,37 +582,37 @@ const deleteTask = async (taskToDelete) => {
     }
 };
 
-const promptSubmitTask = (taskItem) => {
-    taskToSubmitForNotes.value = taskItem;
-    submissionNotes.value = '';
-    submitTaskDialogVisible.value = true;
-};
+// const promptSubmitTask = (taskItem) => {
+//     taskToSubmitForNotes.value = taskItem;
+//     submissionNotes.value = '';
+//     submitTaskDialogVisible.value = true;
+// };
 
-const executeSubmitTask = async () => {
-    if (!taskToSubmitForNotes.value) return;
-    try {
-        const token = getToken();
-        const response = await axios.post(`/api/tasks/${taskToSubmitForNotes.value.id}/submit`, {
-            notes: submissionNotes.value
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.success) {
-            // toast.add({ severity: 'success', summary: 'Éxito', detail: 'Tarea marcada como entregada.', life: 3000 });
-            console.log('Tarea entregada');
-            fetchTasksForTeam(taskToSubmitForNotes.value.team_id);
-            submitTaskDialogVisible.value = false;
-        } else {
-            // toast.add({ severity: 'error', summary: 'Error', detail: response.data.error || 'No se pudo entregar la tarea.', life: 3000 });
-            console.error('Error entregando tarea:', response.data.error);
-        }
-    } catch (error) {
-        console.error("Error submitting task:", error);
-        const errorMsg = error.response?.data?.error || 'Ocurrió un error al entregar la tarea.';
-        // toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 3000 });
-        console.error('Error del servidor:', errorMsg);
-    }
-};
+// const executeSubmitTask = async () => {
+//     if (!taskToSubmitForNotes.value) return;
+//     try {
+//         const token = getToken();
+//         const response = await axios.post(`/api/tasks/${taskToSubmitForNotes.value.id}/submit`, {
+//             notes: submissionNotes.value
+//         }, {
+//             headers: { Authorization: `Bearer ${token}` }
+//         });
+//         if (response.data.success) {
+//             // toast.add({ severity: 'success', summary: 'Éxito', detail: 'Tarea marcada como entregada.', life: 3000 });
+//             console.log('Tarea entregada');
+//             fetchTasksForTeam(taskToSubmitForNotes.value.team_id);
+//             submitTaskDialogVisible.value = false;
+//         } else {
+//             // toast.add({ severity: 'error', summary: 'Error', detail: response.data.error || 'No se pudo entregar la tarea.', life: 3000 });
+//             console.error('Error entregando tarea:', response.data.error);
+//         }
+//     } catch (error) {
+//         console.error("Error submitting task:", error);
+//         const errorMsg = error.response?.data?.error || 'Ocurrió un error al entregar la tarea.';
+//         // toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 3000 });
+//         console.error('Error del servidor:', errorMsg);
+//     }
+// };
 
 
 const viewSubmissions = async (taskToView) => {

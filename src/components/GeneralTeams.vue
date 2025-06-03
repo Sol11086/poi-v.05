@@ -39,11 +39,11 @@
             <!-- Cloudinary Media-->
             <div v-if="msg.file_info" class="file-message-content">
               <p class="message-content">{{ msg.message }}</p>
-              <cld-image v-if="getResourceType(msg.file_info) === 'image'" :cloudName="cldCloudName"
+              <ManualCldImage v-if="getResourceType(msg.file_info) === 'image'" :cloudName="cldCloudName"
                 :public-id="msg.file_info.public_id" width="300" crop="limit" alt="Imagen adjunta"
                 class="uploaded-multimedia my-2" />
 
-              <cld-video v-else-if="getResourceType(msg.file_info) === 'video'" :cloudName="cldCloudName"
+              <ManualCldVideo v-else-if="getResourceType(msg.file_info) === 'video'" :cloudName="cldCloudName"
                 :public-id="msg.file_info.public_id" controls width="400" class="uploaded-multimedia my-2" />
 
               <a v-else-if="getResourceType(msg.file_info) === 'raw' && msg.file_info.url" :href="msg.file_info.url"
@@ -93,7 +93,8 @@ import { useRoute, useRouter } from 'vue-router';
 import socket from '@/utils/socket'; //
 import { parseJwt } from '@/utils/jwt'; //
 import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
-import { CldImage, CldVideo } from '@cloudinary/vue'
+import ManualCldImage from '@/components/ManualCldImage.vue'; // Ajusta la ruta si es necesario
+import ManualCldVideo from '@/components/ManualCldVideo.vue';
 import axios from 'axios';
 
 const router = useRoute();

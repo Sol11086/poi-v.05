@@ -50,10 +50,10 @@ config({
     api_secret: process.env.CLOUDINARY_API_SECRET = 'ZFlju2cWLzqZyYZylwSTty4U0Wo',
     secure: true,
 });
-console.log( "variable cloud name:",process.env.CLOUDINARY_CLOUD_NAME);
-console.log( "variable API_key",process.env.CLOUDINARY_API_KEY);
+console.log("variable cloud name:", process.env.CLOUDINARY_CLOUD_NAME);
+console.log("variable API_key", process.env.CLOUDINARY_API_KEY);
 
-app.post('/api/cloudinary-signature', (req, res) => { 
+app.post('/api/cloudinary-signature', (req, res) => {
     const timestamp = Math.round((new Date).getTime() / 1000);
     const { upload_preset, folder, tags } = req.body;
 
@@ -683,7 +683,7 @@ io.on("connection", (socket) => {
                 const teamChannelResponse = await ManejarTeamChannel_Promise({ team_id, channel_name });
                 if (!teamChannelResponse.success) throw new Error(teamChannelResponse.error || "Failed to get/create team channel");
                 teamChannelIdValue = teamChannelResponse.channel_id;
-                
+
 
             } else {
                 console.error("Tipo de sala no válido:", roomType);
@@ -775,22 +775,21 @@ io.on("connection", (socket) => {
         let queryMessages;
         const queryParams = [room];
 
+        // Se une la tabla messages (m) con users (u) y opcionalmente con multimedia (md)
+        const baseSelect = `
+            SELECT
+                m.id, m.content, m.created_at, m.sender_id, u.username,
+                md.id as multimedia_id, md.file_path, md.file_type,
+                md.original_filename, md.bytes, md.public_id
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            LEFT JOIN multimedia md ON m.id = md.message_id 
+        `; // LEFT JOIN para incluir mensajes sin archivos
+
         if (roomType === 'private') {
-            queryMessages = `
-                SELECT m.id, m.content, m.created_at, m.sender_id, u.username 
-                FROM messages m
-                JOIN users u ON m.sender_id = u.id
-                WHERE m.chat_id = ?
-                ORDER BY m.created_at ASC
-            `;
+            queryMessages = `${baseSelect} WHERE m.chat_id = ? ORDER BY m.created_at ASC`;
         } else if (roomType === 'channel') {
-            queryMessages = `
-                SELECT m.id, m.content, m.created_at, m.sender_id, u.username 
-                FROM messages m
-                JOIN users u ON m.sender_id = u.id
-                WHERE m.team_channel_id = ?
-                ORDER BY m.created_at ASC
-            `;
+            queryMessages = `${baseSelect} WHERE m.team_channel_id = ? ORDER BY m.created_at ASC`;
         } else {
             console.error("Tipo de sala no válido para cargar mensajes:", roomType);
             socket.emit("previousMessages", []);
@@ -799,22 +798,36 @@ io.on("connection", (socket) => {
 
         connection.query(queryMessages, queryParams, (err, results) => {
             if (err) {
-                console.error('Error al cargar mensajes desde la BD:', err);
-                socket.emit("previousMessages", []); // Enviar array vacío en caso de error
+                console.error('Error al cargar mensajes desde la BD (con multimedia):', err);
+                socket.emit("previousMessages", []);
                 return;
             }
 
-            const formattedMessages = results.map(msg => ({
-                id: msg.id,
-                user: { id: msg.sender_id, username: msg.username },
-                message: msg.content,
-                room: room,
-                roomType: roomType,
-                created_at: msg.created_at,
-                time: new Date(msg.created_at).toLocaleTimeString()
-            }));
+            const formattedMessages = results.map(msg => {
+                let file_info = null;
+                if (msg.multimedia_id) { // Si hay un archivo adjunto
+                    file_info = {
+                        id: msg.multimedia_id, // Podrías necesitarlo
+                        url: msg.file_path,
+                        type: msg.file_type,
+                        name: msg.original_filename,
+                        size: msg.bytes,
+                        public_id: msg.public_id
+                    };
+                }
+                return {
+                    id: msg.id,
+                    user: { id: msg.sender_id, username: msg.username },
+                    message: msg.content,
+                    room: room, // El ID de la sala original
+                    roomType: roomType,
+                    created_at: msg.created_at,
+                    time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    file_info: file_info // Adjuntar file_info aquí
+                };
+            });
             socket.emit("previousMessages", formattedMessages);
-            console.log("[server] intentando leer mensajes en sala:", room);
+            console.log("[server] intentando leer mensajes (con multimedia) en sala:", room);
         });
     });
 
