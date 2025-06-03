@@ -769,7 +769,7 @@ app.use((err, req, res, next) => {
     });
 
     // Opcional: notificar que un usuario está listo para llamar
-    socket.on("ready-for-call", ({ room }) => {
+    /*socket.on("ready-for-call", ({ room }) => {
         socket.to(room).emit("user-ready", { id: socket.id });
     });
 
@@ -788,7 +788,7 @@ app.use((err, req, res, next) => {
     // Opcional: notificar que un usuario está listo para llamar
     socket.on("ready-for-call", ({ room }) => {
         socket.to(room).emit("user-ready", { id: socket.id });
-    });
+    });*/
 });
 
 

@@ -1,652 +1,548 @@
-<template>
-  <div class="chat-container flex h-screen">
-    <div class="sidebar w-1/4 bg-gray-800 text-white p-4 overflow-y-auto">
-      <div class="user-profile mb-4 flex items-center">
-        <Avatar 
-          :image="currentUser.avatar || '/default_avatar.png'" @click="toggleCurrentUserPopover($event)" 
-          aria-haspopup="true" 
-          aria-controls="currentUserPopover"
-          class="cursor-pointer" 
-          v-tooltip.bottom="'My Profile'"
-        />
-        <span class="ml-2 font-semibold">{{ currentUser.username }}</span>
-        <Popover ref="currentUserPopoverRef" id="currentUserPopover">
-          <div class="p-3 min-w-[200px]">
-            <img 
-              :src="currentUser.avatar || '/default_avatar.png'" alt="avatar" 
-              class="w-16 h-16 rounded-full mx-auto mb-2 object-cover"
-            />
-            <div class="text-center">
-              <div class="font-bold text-lg">{{ currentUser.username }}</div>
-              <div class="text-sm text-gray-600 dark:text-gray-400">{{ currentUser.email }}</div>
-              <div class="text-xs mt-1">Reward Points: {{ currentUser.reward_points }}</div>
-            </div>
-          </div>
-        </Popover>
-      </div>
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted , computed , watch } from "vue";
+import 'primeicons/primeicons.css'
+import socket from "@/utils/socket.js";
+import { parseJwt } from '@/utils/jwt.js';
 
-      <InputText v-model="searchTerm" placeholder="Search..." class="w-full mb-4 bg-gray-700 border-gray-600" />
 
-      <h3 class="text-lg font-semibold mb-2 mt-4">Direct Messages</h3>
-      <ul>
-        <li v-for="contact in filteredPrivateContacts" :key="contact.id" @click="selectChat(contact, 'private')"
-            class="p-2 hover:bg-gray-700 cursor-pointer rounded flex items-center mb-1">
-          <Avatar 
-            :image="contact.avatar || '/default_avatar.png'" class="mr-2"
-            @click.stop="showUserPopover($event, contact)"
-            aria-haspopup="true"
-            aria-controls="userContactPopover"
-            v-tooltip.bottom="'View Profile'"
-          />
-          <span>{{ contact.username }}</span>
-          <span v-if="contact.status === 'online'" class="ml-auto w-2 h-2 bg-green-500 rounded-full" title="Online"></span>
-        </li>
-      </ul>
-      <Popover ref="userPopoverRef" id="userContactPopover">
-        <div v-if="selectedPopoverUser && selectedPopoverUser.isLoading" class="p-2">Loading...</div>
-        <div v-else-if="selectedPopoverUser && selectedPopoverUser.error" class="p-2 text-red-500">{{ selectedPopoverUser.error }}</div>
-        <div v-else-if="selectedPopoverUser && selectedPopoverUser.id" class="p-3 min-w-[200px]">
-          <img 
-            :src="selectedPopoverUser.avatar || '/default_avatar.png'" alt="avatar"
-            class="w-16 h-16 rounded-full mx-auto mb-2 object-cover" />
-          <div class="text-center">
-            <div class="font-bold text-lg">{{ selectedPopoverUser.username }}</div>
-            <div class="text-sm text-gray-600 dark:text-gray-400">{{ selectedPopoverUser.email }}</div>
-            <div class="text-xs mt-1">Status: <span
-                :class="selectedPopoverUser.status === 'online' ? 'text-green-400' : 'text-gray-400'">{{
-                selectedPopoverUser.status }}</span></div>
-            <div class="text-xs mt-1">Reward Points: {{ selectedPopoverUser.reward_points }}</div>
-          </div>
-        </div>
-      </Popover>
+const remotePeerId = ref('');
+const currentCall = ref(null);
+const selectedTeam = computed(() => {
+    return equipos.value.find(equipo => equipo.id === generalId.value);
+});
+const equipos = ref<{ nombre: string; urlImagen: string }[]>([]);
+const generalId = ref(null);
+const activeCallTeamId = ref(null);
+const activeChatTeamId = ref(null);
+const callId = ref(false);
+const showCreateTeam = ref(false);
+const selectedCountries = ref();
+const visibleRight = ref(false);
+const microphoneOn = ref(false);
+const cameraOn = ref(false);
+const audioOn = ref(false);
 
-      <h3 class="text-lg font-semibold mt-6 mb-2">Team Channels</h3>
-      <div v-for="team in filteredTeams" :key="team.id" class="mb-3">
-        <div class="font-medium p-2 hover:bg-gray-600 rounded flex items-center cursor-pointer"
-            @click.stop="showTeamPopover($event, team)">
-          <Avatar :image="team.image || '/default_team_avatar.png'" class="mr-2" /> {{ team.team_name }}
-        </div>
-        <ul class="ml-4 mt-1">
-          <li v-for="channel in team.channels" :key="channel.id" @click="selectChat(channel, 'channel', team)"
-              class="p-2 pl-4 hover:bg-gray-700 cursor-pointer rounded text-sm">
-            # {{ channel.channel_name }}
-          </li>
-        </ul>
-      </div>
-      <Popover ref="teamPopoverRef" id="teamPopover">
-         <div v-if="selectedPopoverTeam && selectedPopoverTeam.isLoading" class="p-2">Loading team details...</div>
-         <div v-else-if="selectedPopoverTeam && selectedPopoverTeam.error" class="p-2 text-red-500">{{ selectedPopoverTeam.error }}</div>
-         <div v-else-if="selectedPopoverTeam && selectedPopoverTeam.id" class="p-2 min-w-[250px]">
-          <img :src="selectedPopoverTeam.image || '/default_team_avatar.png'" alt="team avatar" class="w-20 h-20 rounded-full mx-auto mb-2 object-cover" />
-          <div class="text-center font-bold text-lg mb-1">{{ selectedPopoverTeam.team_name }}</div>
-          <p v-if="selectedPopoverTeam.caption" class="text-sm text-gray-300 mb-2 break-words"><em>{{
-                selectedPopoverTeam.caption }}</em></p>
-          <div v-if="selectedPopoverTeam.ownerDetails" class="text-xs mb-2">
-            Owner: {{ selectedPopoverTeam.ownerDetails.username }}
-          </div>
-          <div v-if="selectedPopoverTeam.members && selectedPopoverTeam.members.length">
-            <h4 class="font-semibold mt-2 text-sm">Members ({{ selectedPopoverTeam.members.length }}):</h4>
-            <ul class="text-xs max-h-24 overflow-y-auto">
-              <li v-for="member in selectedPopoverTeam.members" :key="member.user_id">
-                {{ member.username }} ({{ member.role }})
-              </li>
-            </ul>
-          </div>
-        </div>
-      </Popover>
-    </div>
+const localVideoRef = ref<HTMLVideoElement | null>(null);
+const remoteVideoRef = ref<HTMLVideoElement | null>(null);
 
-    <div class="chat-area flex-1 flex flex-col bg-gray-700">
-      <div v-if="selectedChat.id || (selectedChat.roomType === 'private' && selectedChat.recipientId)"
-          class="chat-header p-4 bg-gray-800 text-white border-b border-gray-600 flex items-center">
-        <template v-if="selectedChat.roomType === 'private' && selectedChat.recipientId">
-          <Avatar 
-            v-if="selectedChat.avatar" 
-            :image="selectedChat.avatar || '/default_avatar.png'" class="mr-3 cursor-pointer" 
-            @click="showChatHeaderContactPopover($event)"
-            aria-haspopup="true"
-            aria-controls="chatHeaderContactPopover"
-            v-tooltip.bottom="'View Profile'"
-          />
-          <h2 
-            class="text-xl cursor-pointer hover:underline" 
-            @click="showChatHeaderContactPopover($event)"
-            aria-haspopup="true"
-            aria-controls="chatHeaderContactPopover"
-          >
-            {{ selectedChat.name }}
-          </h2>
-        </template>
-        <template v-else> <Avatar :image="selectedChat.avatar || '/default_team_avatar.png'" class="mr-3" /> <h2 class="text-xl">{{ selectedChat.name }}</h2>
-        </template>
-      </div>
-      <div v-else class="no-chat-selected flex-1 flex items-center justify-center text-gray-400">
-        <p class="text-2xl">Select a chat to start messaging</p>
-      </div>
-      
-      <Popover ref="chatHeaderContactPopoverRef" id="chatHeaderContactPopover">
-        <div v-if="activeChatContactDetails && activeChatContactDetails.isLoading" class="p-2">Loading contact info...</div>
-        <div v-else-if="activeChatContactDetails && activeChatContactDetails.error" class="p-2 text-red-500">{{ activeChatContactDetails.error }}</div>
-        <div v-else-if="activeChatContactDetails && activeChatContactDetails.id" class="p-3 min-w-[200px]">
-          <img :src="activeChatContactDetails.avatar || '/default_avatar.png'" alt="avatar" class="w-16 h-16 rounded-full mx-auto mb-2 object-cover"/>
-          <div class="text-center">
-            <div class="font-bold text-lg">{{ activeChatContactDetails.username }}</div>
-            <div class="text-sm text-gray-600 dark:text-gray-400">{{ activeChatContactDetails.email }}</div>
-            <div class="text-xs mt-1">Status: <span 
-                :class="activeChatContactDetails.status === 'online' ? 'text-green-400' : 'text-gray-400'">{{ activeChatContactDetails.status }}</span></div>
-            <div class="text-xs mt-1">Reward Points: {{ activeChatContactDetails.reward_points }}</div>
-          </div>
-        </div>
-      </Popover>
 
-       <div class="messages flex-1 overflow-y-auto p-4 space-y-4" ref="messagesContainerRef">
-         <div v-for="msg in messages" :key="msg.id"
-             :class="['message-item flex flex-col', msg.user.id === currentUser.id ? 'items-end' : 'items-start']">
-           <div
-               :class="['message-bubble p-3 rounded-lg max-w-lg break-words', msg.user.id === currentUser.id ? 'bg-[var(--p-primary-500)] text-white' : 'bg-gray-600 text-white']">
-             <div class="font-semibold text-sm mb-1">{{ msg.user.username }}</div>
-             <p v-if="msg.message && (!msg.file_info || (msg.file_info && msg.message !== `Archivo: ${msg.file_info.name}`))"
-                 class="whitespace-pre-wrap">{{ msg.message }}</p>
+const token = localStorage.getItem('user_token');
+const username = parseJwt(token).username;
 
-             <div v-if="msg.file_info" class="mt-2 p-2 bg-opacity-20 bg-black rounded">
-               <a :href="msg.file_info.url" target="_blank" rel="noopener noreferrer"
-                   class="underline break-all flex items-center text-sm hover:text-blue-300">
-                 <i :class="getFileIcon(msg.file_info.type)" class="mr-2 text-lg"></i>
-                 <span class="flex-1 truncate">{{ msg.file_info.name || msg.file_info.original_filename
-                     || 'Attached File' }}</span>
-               </a>
-              <div v-if="isImage(msg.file_info.type) && msg.file_info.public_id" class="mt-1">
-                   <ManualCldImage :publicId="msg.file_info.public_id" :cloudName="cloudinaryCloudName"
-                       :alt="msg.file_info.name || 'shared image'"
-                       class="max-w-full max-h-60 rounded mt-1 cursor-pointer object-contain"
-                       @click="openImageModal(msg.file_info.url)" width="300" height="240" crop="limit"
-                       fetchFormat="auto" quality="auto" />
-               </div>
-               <div v-else-if="isVideo(msg.file_info.type) && msg.file_info.public_id" class="mt-1">
-                   <ManualCldVideo :publicId="msg.file_info.public_id" controls :cloudName="cloudinaryCloudName"
-                       class="max-w-full max-h-60 rounded mt-1" width="300" height="240" crop="limit"
-                       fetchFormat="auto" quality="auto" />
-               </div>
-               <div v-else-if="isAudio(msg.file_info.type)" class="mt-1">
-                   <audio :src="msg.file_info.url" controls class="w-full"></audio>
-               </div>
-               <div class="text-xs text-gray-300 mt-1">{{ formatBytes(msg.file_info.size ||
-                   msg.file_info.bytes) }}</div>
-             </div>
+const peer = new Peer(parseJwt(token).id)
 
-             <div class="text-xs text-opacity-80 mt-1 text-right">{{ msg.time }}</div>
-           </div>
-         </div>
-       </div>
+let localStream: MediaStream;
 
-       <div v-if="selectedChat.id || (selectedChat.roomType === 'private' && selectedChat.recipientId)"
-           class="message-input p-4 bg-gray-800 border-t border-gray-600 flex items-center gap-2">
-         <CloudinaryUploadButton :uploadPreset="cloudinaryChatPreset" :folder="cloudinaryChatFolder"
-             :tags="['chat', selectedChat.roomType || 'unknown', selectedChat.id || 'new']"
-             @upload-success="handleFileUpload" @upload-error="handleUploadError" icon="pi pi-paperclip" rounded
-             text />
-         <Textarea v-model="newMessage" @keydown.enter.prevent="handleEnterKey" placeholder="Type a message..."
-             class="flex-1" autoResize rows="1" />
-         <Button @click="sendMessage()" label="Send" icon="pi pi-send"
-             :disabled="!newMessage.trim() && !pendingFile" />
-       </div>
-    </div>
-  </div>
+peer.on('call', call => {
+    call.answer(localStream)
+    call.on('stream', remoteStream => {
+        remoteVideoRef.srcObject = remoteStream
+    })
+})
 
-  <Dialog v-model:visible="isImageModalVisible" modal header="Image Preview" :style="{ width: '75vw' }"
-      :breakpoints="{ '960px': '90vw' }">
-    <img :src="modalImageUrl" alt="Preview" class="w-full h-auto max-h-[80vh] object-contain" />
-  </Dialog>
-</template>
+const visibleCreateRoom = ref(false);
+const visibleVideoCall = ref(false);
 
-<script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'; // Importar onUnmounted
-import socket from '@/utils/socket';
-import { parseJwt } from '@/utils/jwt';
-import Avatar from 'primevue/avatar';
-import Button from 'primevue/button';
-import InputText from 'primevue/inputtext';
-import Popover from 'primevue/popover';
-import Textarea from 'primevue/textarea';
-import Dialog from 'primevue/dialog';
-import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
-import ManualCldImage from '@/components/ManualCldImage.vue';
-import ManualCldVideo from '@/components/ManualCldVideo.vue';
-import apiService from '@/services/apiService';
+const startCall = async () => {
+    try {
+        // Obtener acceso a la cámara y micrófono
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 
-const cloudinaryCloudName = 'duhrxfco6';
+        // Asignar stream local al video local
+        if (localVideoRef.value) {
+            localVideoRef.value.srcObject = stream;
+        }
 
-// --- Estado del Usuario y Contactos ---
-const currentUser = ref({ id: null, username: 'User', email: '', avatar: '', reward_points: 0 });
-const privateContacts = ref([]);
-const teamsAndChannels = ref([]);
-const searchTerm = ref('');
-const selectedChat = ref({ id: null, name: '', roomType: null, teamId: null, recipientId: null, avatar: null });
+        // Hacer la llamada usando callId como remote peer ID
+        if (!callId) {
+            console.error("callId no está definido.");
+            return;
+        }
 
-// --- Mensajes ---
+        const call = peer.call(callId, stream);
+
+        // Escuchar el stream remoto y asignarlo al video remoto
+        call.on('stream', (remoteStream) => {
+            if (remoteVideoRef.value) {
+                remoteVideoRef.value.srcObject = remoteStream;
+            }
+        });
+
+        // Guardar stream y llamada para detener luego
+        currentCall.value = call;
+        localStream = stream;
+
+    } catch (error) {
+        console.error('Error al iniciar llamada:', error);
+    }
+};
+
+function handleCallClick(id: number) {
+    visibleVideoCall.value = true; 
+    remotePeerId.value = id;
+    callId.value = id;
+    cameraOn.value = true;
+    microphoneOn.value = true;
+    startCall(id);
+}
+
+function endCall() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    if (localVideoRef.value) {
+        localVideoRef.value.srcObject = null;
+    }
+    if (remoteVideoRef.value) {
+        remoteVideoRef.value.srcObject = null;
+    }
+
+    cameraOn.value = false;
+    microphoneOn.value = false;
+
+    callId.value = null;
+}
+
+watch([cameraOn, callId], async ([cam, id]) => {
+    if (cam && id !== null) {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            if (localVideoRef.value) {
+                localVideoRef.value.srcObject = localStream;
+            }
+            console.log('✅ Cámara activada');
+
+            
+
+        } catch (error) {
+            console.error('🚫 No se pudo acceder a la cámara/micrófono:', error);
+            alert('Activa los permisos de cámara y micrófono para iniciar la llamada.');
+            cameraOn.value = false;
+        }
+    }
+});
+
+
+watch([callId, cameraOn], ([id, cam]) => {
+    if (id === null || !cam) {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+            console.log('📴 Cámara detenida');
+        }
+    }
+});
+
+
+onUnmounted(() => {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+});
+
+
+
+///VIDEOLLAMADA////
+
+socket.on("connect", () => {
+    console.log("Conectado al servidor con ID:", socket.id);
+});
+
+
+
+const chats = ref([
+    { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
+    { id: 2, name: 'María', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg' },
+    { id: 3, name: 'Chat Global', avatar: '../src/assets/logo.png' }
+]);
+
+const selectedChat = ref(null);
 const messages = ref([]);
 const newMessage = ref('');
-const pendingFile = ref(null);
-const messagesContainerRef = ref(null);
 
-// --- Popovers Refs y Datos ---
-const currentUserPopoverRef = ref();
-const userPopoverRef = ref();
-const selectedPopoverUser = ref(null);
-const teamPopoverRef = ref();
-const selectedPopoverTeam = ref(null);
-const chatHeaderContactPopoverRef = ref();
-const activeChatContactDetails = ref(null);
+//const room = ref(""); // implementar cuando se tenga conexión con la base
+const isJoined = ref(false);
 
-// --- Modal de Imagen ---
-const isImageModalVisible = ref(false);
-const modalImageUrl = ref('');
+// Salir de la sala - implementar cuando el usuario abandone el grupo
+// const leaveRoom = (room) => {
+//   socket.emit("leaveRoom", room);
+// };
 
-// --- Configuración Cloudinary ---
-const cloudinaryChatPreset = 'vue_chat_uploads';
-const cloudinaryChatFolder = computed(() => {
-    if (!selectedChat.value || !selectedChat.value.id) return `vue_chat_uploads/unsorted`;
-    return `vue_chat_uploads/${selectedChat.value.roomType || 'unknown'}/${selectedChat.value.id}`;
-});
-
-// --- Lógica de Popovers --- (sin cambios, asumo que está como en tu última versión)
-const toggleCurrentUserPopover = (event) => {
-  if (currentUserPopoverRef.value) {
-    currentUserPopoverRef.value.toggle(event);
-  }
-};
-
-const showUserPopover = async (event, userFromList) => {
-  selectedPopoverUser.value = { ...userFromList, isLoading: true, error: null };
-  if (userPopoverRef.value) userPopoverRef.value.toggle(event);
-  else return;
-
-  try {
-    const fullUserDetails = await apiService.getUserDetails(userFromList.id);
-    selectedPopoverUser.value = { ...(fullUserDetails || userFromList), isLoading: false };
-  } catch (error) {
-    console.error("Error fetching user details for sidebar popover:", error);
-    selectedPopoverUser.value = { ...userFromList, isLoading: false, error: 'Failed to load details' };
-  }
-};
-
-const showTeamPopover = async (event, team) => {
-  selectedPopoverTeam.value = { ...team, members: (team.members || []), ownerDetails: null, isLoading: true, error: null };
-  if (teamPopoverRef.value) teamPopoverRef.value.toggle(event);
-  else return;
-  
-  try {
-    const membersData = await apiService.getTeamMembers(team.id);
-    const ownerDetails = team.owner_id ? await apiService.getUserDetails(team.owner_id) : null;
-    selectedPopoverTeam.value = { ...team, members: membersData || [], ownerDetails, isLoading: false };
-  } catch (error) {
-    console.error("Error fetching team details for popover:", error);
-    selectedPopoverTeam.value = { ...team, members: (team.members || []), ownerDetails: null, isLoading: false, error: 'Failed to load details' };
-  }
-};
-
-const showChatHeaderContactPopover = async (event) => {
-  if (!selectedChat.value || selectedChat.value.roomType !== 'private' || !selectedChat.value.recipientId) {
-    return;
-  }
-  activeChatContactDetails.value = { 
-    id: selectedChat.value.recipientId, 
-    username: selectedChat.value.name,
-    avatar: selectedChat.value.avatar,
-    isLoading: true,
-    error: null
-  };
-  if (chatHeaderContactPopoverRef.value) chatHeaderContactPopoverRef.value.toggle(event);
-  else return;
-
-  try {
-    const fullContactDetails = await apiService.getUserDetails(selectedChat.value.recipientId);
-    activeChatContactDetails.value = { ...(fullContactDetails || activeChatContactDetails.value), isLoading: false };
-  } catch (error) {
-    console.error("Error fetching contact details for chat header popover:", error);
-    activeChatContactDetails.value = { 
-      ...activeChatContactDetails.value, 
-      isLoading: false, 
-      error: 'Failed to load details' 
-    };
-  }
-};
-
-// --- Filtros ---
-const filteredPrivateContacts = computed(() => {
-    if (!searchTerm.value) return privateContacts.value;
-    return privateContacts.value.filter(c => c.username.toLowerCase().includes(searchTerm.value.toLowerCase()));
-});
-
-const filteredTeams = computed(() => {
-    if (!searchTerm.value.trim()) return teamsAndChannels.value;
-    const searchLower = searchTerm.value.toLowerCase();
-    return teamsAndChannels.value
-        .map(team => {
-            const teamNameMatches = team.team_name.toLowerCase().includes(searchLower);
-            const matchingChannels = team.channels.filter(ch => ch.channel_name.toLowerCase().includes(searchLower));
-            if (teamNameMatches || matchingChannels.length > 0) {
-                return { ...team, channels: teamNameMatches ? team.channels : matchingChannels };
-            }
-            return null;
-        })
-        .filter(Boolean);
-});
-
-// --- Scroll y Watchers ---
-const scrollToBottom = () => {
-    nextTick(() => {
-        if (messagesContainerRef.value) {
-            messagesContainerRef.value.scrollTop = messagesContainerRef.value.scrollHeight;
-        }
-    });
-};
-watch(messages, scrollToBottom, { deep: true, flush: 'post' });
-
-// --- Manejadores de Eventos de Socket --- (Definidos fuera de onMounted para poder referenciarlos en onUnmounted)
-const handleReceiveMessage = (message) => {
-  console.log("Socket: receiveMessage event", message); // Log para depurar
-  if (selectedChat.value.id === message.room ||
-      (selectedChat.value.roomType === 'private' &&
-          (message.user.id === selectedChat.value.recipientId || message.user.id === currentUser.value.id) &&
-          message.room === selectedChat.value.id
-      )
-     ) {
-    messages.value.push(message);
-    // scrollToBottom(); // watch(messages, ...) ya se encarga de esto
-  } else {
-    console.log("Received message for a different room/chat:", message.room, "Selected chat:", selectedChat.value.id);
-  }
-};
-
-const handlePreviousMessages = (prevMessages) => {
-  console.log("Socket: previousMessages event", prevMessages); // Log para depurar
-  messages.value = prevMessages;
-  // scrollToBottom(); // watch(messages, ...) ya se encarga de esto
-};
-
-const handleMessageError = (error) => {
-  console.error("Socket: messageError event", error.message);
-};
-
-
-// --- Ciclo de Vida y Sockets ---
-onMounted(async () => {
-  console.log("Chat.vue: onMounted - Start");
-  const token = localStorage.getItem('user_token');
-  if (token) {
-    const decodedToken = parseJwt(token);
-    if (decodedToken && decodedToken.id) {
-      try {
-        const userDetails = await apiService.getUserDetails(decodedToken.id);
-        if (userDetails) {
-            currentUser.value = { 
-                ...currentUser.value, 
-                ...userDetails, 
-                avatar: userDetails.avatar || currentUser.value.avatar, 
-                id: decodedToken.id, 
-                username: decodedToken.username 
-            };
-        } else {
-             currentUser.value.id = decodedToken.id;
-             currentUser.value.username = decodedToken.username || 'User';
-             currentUser.value.avatar = currentUser.value.avatar || '';
-        }
-      } catch (error) {
-        console.error("Chat.vue: Failed to fetch current user details onMount:", error);
-        currentUser.value.id = decodedToken.id;
-        currentUser.value.username = decodedToken.username || 'User';
-        currentUser.value.avatar = currentUser.value.avatar || '';
-      }
-    } else { 
-      console.error("Chat.vue: Invalid token/ID in onMounted. Cannot proceed.");
-      // Considerar redireccionar a login si es crítico: router.push('/login');
-      return; 
-    }
-  } else { 
-    console.error("Chat.vue: No token found in onMounted. Cannot proceed.");
-    // Considerar redireccionar a login: router.push('/login');
-    return; 
-  }
-
-  console.log("Chat.vue: Current user is:", currentUser.value);
-  await fetchContactsAndChannels();
-
-  // Registrar listeners de socket
-  console.log("Chat.vue: Registering socket listeners in onMounted");
-  socket.on("receiveMessage", handleReceiveMessage);
-  socket.on("previousMessages", handlePreviousMessages);
-  socket.on("messageError", handleMessageError);
-
-  // Join rooms (puede que quieras refinar esta lógica para unirse solo a las salas necesarias)
-  const teamChannelRoomIds = teamsAndChannels.value.flatMap(team => team.channels.map(ch => ch.id));
-  if (teamChannelRoomIds.length > 0) {
-    console.log("Chat.vue: Joining team channel rooms:", teamChannelRoomIds);
-    socket.emit('joinAllRooms', teamChannelRoomIds);
-  }
-  console.log("Chat.vue: onMounted - End");
-});
-
-// ***** AÑADIDO: Limpiar listeners de socket cuando el componente se destruye *****
-onUnmounted(() => {
-  console.log("Chat.vue: onUnmounted - Cleaning up socket listeners");
-  socket.off("receiveMessage", handleReceiveMessage);
-  socket.off("previousMessages", handlePreviousMessages);
-  socket.off("messageError", handleMessageError);
-  // Si te unes a salas específicas al seleccionar chat, considera emitir "leaveRoom" aquí para selectedChat.value.id si existe
-});
-
-
-const fetchContactsAndChannels = async () => {
-    try {
-        const [contactsData, teamsData] = await Promise.all([
-            apiService.getPrivateContacts(),
-            apiService.getMyTeamsAndChannels()
-        ]);
-        privateContacts.value = contactsData || [];
-        teamsAndChannels.value = teamsData || [];
-    } catch (error) {
-        console.error("Error fetching contacts/channels:", error);
-        privateContacts.value = [];
-        teamsAndChannels.value = [];
-    }
-};
-
-const selectChat = async (item, type, teamContext = null) => {
+// Resetear estado al salir de la sala
+socket.on("leftRoom", () => {
     messages.value = [];
-    pendingFile.value = null;
-    activeChatContactDetails.value = null; 
+    isJoined.value = false;
+    room.value = "";
+});
 
-    if (type === 'private') {
-        selectedChat.value = {
-            id: null, 
-            name: item.username,
-            roomType: 'private',
-            recipientId: item.id,
-            teamId: null,
-            avatar: item.avatar 
-        };
-        try {
-            const roomData = await apiService.getOrCreatePrivateChatRoom(item.id);
-            selectedChat.value.id = roomData.chat_id;
-            if (socket.connected) {
-                console.log("Chat.vue: Joining private chat room:", selectedChat.value.id);
-                socket.emit('joinAllRooms', [selectedChat.value.id]); // Se une a la sala privada específica
-                socket.emit("loadMessages", { room: selectedChat.value.id, roomType: 'private' });
-            } else {
-                console.warn("Socket not connected when trying to select private chat.");
-            }
-        } catch (err) {
-            console.error("Error selecting private chat:", err);
-        }
-    } else if (type === 'channel') {
-        selectedChat.value = {
-            id: item.id,
-            name: `#${item.channel_name}`,
-            roomType: 'channel',
-            teamId: teamContext ? teamContext.id : null,
-            channelName: item.channel_name,
-            recipientId: null,
-            avatar: teamContext ? teamContext.image : null
-        };
-        if (socket.connected) {
-            // Las salas de canal de equipo ya se unieron en onMounted.
-            // Si cambias esa lógica, necesitarías unirte aquí: socket.emit('joinAllRooms', [selectedChat.value.id]);
-            console.log("Chat.vue: Loading messages for team channel:", selectedChat.value.id);
-            socket.emit("loadMessages", { room: selectedChat.value.id, roomType: 'channel' });
-        } else {
-            console.warn("Socket not connected when trying to select team channel.");
-        }
-    }
-    newMessage.value = '';
+// Escuchar mensajes previos cuando se une a una sala
+socket.on("previousMessages", (history) => {
+    messages.value = history;
+});
+
+const selectChat = (chat) => {
+    selectedChat.value = chat;
+    messages.value = [];
+    chat.unreadMessages = 0; // Resetear notificaciones
+    socket.emit("loadMessages", chat.id);
 };
 
 const sendMessage = () => {
-    const messageText = newMessage.value.trim();
-    const fileToSend = pendingFile.value;
-
-    if (!messageText && !fileToSend) return;
-    if (!selectedChat.value.id && selectedChat.value.roomType !== 'private') {
-        console.error("No chat selected or room ID missing");
-        return;
-    }
-    if (selectedChat.value.roomType === 'private' && !selectedChat.value.id) {
-        console.error("Private chat room ID not available. Cannot send message.");
-        return;
-    }
-    if (!socket.connected) {
-      alert("No estás conectado al servidor de chat. Intenta recargar la página o verifica tu conexión.");
-      return;
-    }
-
-    const messageData = {
-        message: messageText,
-        sender_id: currentUser.value.id,
-        roomType: selectedChat.value.roomType,
-        file_info: fileToSend,
-    };
-
-    if (selectedChat.value.roomType === 'private') {
-        messageData.receiver_id = selectedChat.value.recipientId;
-        messageData.room = selectedChat.value.id;
-    } else if (selectedChat.value.roomType === 'channel') {
-        messageData.room = selectedChat.value.id;
-        messageData.team_id = selectedChat.value.teamId;
-        messageData.channel_name = selectedChat.value.channelName;
-    }
-
-    console.log("Chat.vue: Emitting sendMessage event", messageData); // Log para depurar
-    socket.emit("sendMessage", messageData);
+    if (newMessage.value.trim() === '') return;
+    socket.emit("sendMessage", {
+        room: selectedChat.value.id,//id del chat 
+        message: newMessage.value,
+        user: username || "Anónimo",
+    });
     newMessage.value = '';
-    pendingFile.value = null;
 };
 
-const handleEnterKey = (event) => {
-    if (event.shiftKey) {
-        return;
-    }
-    sendMessage();
-};
+//Escuchar mensajes recibidos
+onMounted(() => {
+    const roomIds = chats.value.map(chat => chat.id); // Extrae solo los IDs de las salas
+    socket.emit("joinAllRooms", roomIds);
 
-const handleFileUpload = (fileInfoFromEvent) => {
-  console.log("Chat.vue: handleFileUpload received from button:", fileInfoFromEvent);
-  pendingFile.value = {
-      url: fileInfoFromEvent.url,
-      type: fileInfoFromEvent.type, 
-      original_filename: fileInfoFromEvent.original_filename,
-      bytes: fileInfoFromEvent.bytes,
-      public_id: fileInfoFromEvent.public_id,
-      name: fileInfoFromEvent.name || fileInfoFromEvent.original_filename,
-      size: fileInfoFromEvent.size || fileInfoFromEvent.bytes
-  };
-  console.log("Chat.vue: Set pendingFile.value to:", pendingFile.value);
-  if (!newMessage.value.trim()) {
-      sendMessage();
-  }
-};
+    socket.on("receiveMessage", (message) => {
+        if (selectedChat.value && selectedChat.value.id === message.room) {
+            messages.value.push(message);
+        } else {
+            console.log(`Mensaje recibido en otra sala (${message.room}):`, message);
+            const chat = chats.value.find(c => c.id === message.room);
+            if (chat) chat.unreadMessages += 1; // Incrementa contador de mensajes no leídos
+        }
+    });
 
-const handleUploadError = (error) => console.error("Chat.vue: Upload error in chat:", error);
+    peer.on('open',function(id){
+                console.log(id);
+            })
+});
 
-// --- Helpers de Archivos ---
-const getFileIcon = (fileType) => {
-    if (!fileType) return 'pi pi-file';
-    if (fileType.startsWith('image') || fileType === 'image') return 'pi pi-image';
-    if (fileType.startsWith('video') || fileType === 'video') return 'pi pi-video';
-    if (fileType === 'application/pdf' || fileType === 'pdf') return 'pi pi-file-pdf';
-    if (fileType.startsWith('audio')) return 'pi pi-volume-up';
-    return 'pi pi-file';
-};
-const isImage = (fileType) => fileType && (fileType.startsWith('image') || fileType === 'image');
-const isVideo = (fileType) => fileType && (fileType.startsWith('video') || fileType === 'video');
-const isAudio = (fileType) => fileType && fileType.startsWith('audio');
-const formatBytes = (bytes, decimals = 2) => {
-    if (!bytes || bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-};
-const openImageModal = (url) => {
-    modalImageUrl.value = url;
-    isImageModalVisible.value = true;
-};
+onUnmounted(() => {
+    socket.off("receiveMessage");
+});
+
+const emit = defineEmits(['view-profile'])
+
+function goToProfile() {
+    emit('view-profile', selectedChat)
+}
 
 </script>
 
+<template>
+    <div class="chat-container">
+        <div class="sidebar">
+            <h2 class="sidebar-title">Contacts</h2>
+            <ul class="user-list">
+                <li v-for="chat in chats" :key="chat.id" @click="selectChat(chat)" class="user-item">
+                    <img :src="chat.avatar" class="user-avatar" />
+                    <span>{{ chat.name }}</span>
+                    <span v-if="chat.unreadMessages > 0" class="unread-badge">{{ chat.unreadMessages }}</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Área del chat -->
+        <div class="chat-area">
+            <!-- Header del chat -->
+            <div v-if="selectedChat" class="chat-header justify-between">
+                <div class="flex">
+                    <img :src="selectedChat.avatar" class="chat-header-avatar" @click="goToProfile" />
+                    <div>
+                        <h2 class="chat-header-title">{{ selectedChat.name }}</h2>
+                        <p class="chat-header-status">En línea</p>
+                    </div>
+                </div>
+                <div>
+                    <Button icon="pi pi-video" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        class="text-[#129E82] p-1" @click="visibleCreateRoom = true"
+                        v-tooltip.bottom="'Iniciar Video llamada'" />
+                </div>
+            </div>
+            <!-- Mensajes -->
+            <div class="message-container">
+                <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
+                    class="message-item">
+                    <p class="message-text" :class="msg.user === username ? 'message-sent' : 'message-received'">
+                        {{ msg.message }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Input de mensaje -->
+            <div class="message-input">
+                <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
+                    class="message-input-field" />
+                <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
+                    class="send-button" />
+            </div>
+        </div>
+    </div>
+
+    <Dialog v-model:visible="visibleCreateRoom" modal class="w-1/4 h-fit" :style="{ backgroundColor: transparent }"
+        pt:root:class="!border-0 !bg-transparent">
+        <template #container="{ closeCallback }">
+            <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
+                <span class="text-gray-500"> Comenzar llamada </span>
+                <div class="relative w-fit h-fit">
+                    <Button icon="pi pi-phone" @click="handleCallClick"
+                        class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
+                    <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
+                        @click="handleCallClick"></i>
+                </div>
+                <Button icon="pi pi-times" @click="activeCallTeamId = false"
+                    class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
+            </div>
+        </template>
+    </Dialog>
+
+    <Dialog v-model:visible="visibleVideoCall" class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
+        content: {
+            class: 'p-4 h-full overflow-y-auto'
+        }
+    }">
+        <template #header>
+            <div class="flex justify-between items-center">
+                <div class="p-4 flex justify-between items-center">
+                    <span class="text-white mr-2 font-bold">Titulo de la llamada</span>
+                    <Button icon="pi pi-comment" @click="visibleRight = !visibleRight" severity="secondary"
+                        variant="text" rounded aria-label="Bookmark"
+                        :class="visibleRight ? 'text-[#129E82]' : 'text-[#646466]'"
+                        v-tooltip.bottom="'Abrir chat grupal'" />
+                    <Button icon="pi pi-microphone" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        @click="microphoneOn = !microphoneOn"
+                        :class="microphoneOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                    <Button icon="pi pi-camera" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        @click="cameraOn = !cameraOn" :class="cameraOn ? 'text-[#129E82]' : 'text-[#646466]'"
+                        class="text-[#129E82]" />
+                    <Button icon="pi pi-headphones" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        class="text-[#129E82]" @click="audioOn = !audioOn"
+                        :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                </div>
+                <div>
+                    <Button severity="secondary" @click="endCall" label="Colgar llamada" class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm 
+                                    font-light hover:bg-[#8a2222] hover:text-white" />
+                </div>
+                <div>
+                    <span class="text-white font-bold">Sala: {{ roomId }}</span>
+                    <Button label="Copiar ID" @click="copyToClipboard(roomId)" icon="pi pi-copy"
+                        class="text-xs text-[#9F86F9]" />
+                </div>
+            </div>
+        </template>
+        <div class="flex h-full">
+            <div v-if="visibleRight" class="relative z-10 bg-[#04293C] h-full w-1/3">
+                <div class="h-10/12">
+                    <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#081d27] p-4">
+                        <i class="pi pi-comment"></i>
+                        <div>
+                            <p class="chat-header-status">Chat grupal</p>
+                        </div>
+                    </div>
+                    <div class="h-full bg-[#030d11] p-4">
+                        <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
+                            class="message-item">
+                            <p class="message-text"
+                                :class="msg.user === username ? 'message-sent' : 'message-received'">
+                                {{ msg.message }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="bg-[#081d27] flex items-center justify-between p-4">
+                        <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
+                            class="bg-[#030d11] text-white p-2" />
+                        <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
+                            class="hover:text-[#129E82]" />
+                    </div>
+                </div>
+            </div>
+            <video ref="localVideoRef" autoplay muted v-if="cameraOn"
+                class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
+                Tu camara
+            </video>
+            <video ref="remoteVideoRef" autoplay
+                class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
+                <span class="text-xl"> En espera </span>
+                <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+            </video>
+        </div>
+    </Dialog>
+</template>
+
 <style scoped>
-.sidebar,
-.messages {
-    &::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    &::-webkit-scrollbar-track {
-        background: #374151;
-        /* bg-gray-700 */
-    }
-
-    &::-webkit-scrollbar-thumb {
-        background: #6b7280;
-        /* bg-gray-500 */
-        border-radius: 3px;
-    }
-
-    &::-webkit-scrollbar-thumb:hover {
-        background: #9ca3af;
-        /* bg-gray-400 */
-    }
+.chat-container {
+    display: flex;
+    height: 100%;
 }
 
 .sidebar {
-    background-color: #1f2937;
-    /* bg-gray-800 slightly darker */
+    width: 16rem;
+    /* Ancho más grande */
+    background-color: #2C2F38;
+    /* DarkJungle */
+    color: white;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.sidebar-title {
+    font-size: 1.125rem;
+    /* text-lg */
+    font-weight: 600;
+    /* font-semibold */
+    margin-bottom: 1rem;
+}
+
+.user-list {
+    list-style: none;
+    padding: 0;
+
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    cursor: pointer;
+    border-radius: 0.5rem;
+}
+
+.user-item:hover {
+    background-color: #2F3339;
+}
+
+.user-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    margin-right: 0.75rem;
+    /* gap-3 */
+}
+
+.unread-badge {
+    background-color: #10B981;
+    color: #D1D5DB;
+    width: 2vh;
+    margin: 0px 5px;
+    border-radius: 50%;
+    text-align: center;
 }
 
 .chat-area {
-    background-color: #374151;
-    /* bg-gray-700 */
+    width: 100%;
+    height: 100%;
+    /* 3/4 de ancho */
+    display: flex;
+    flex-direction: column;
 }
 
 .chat-header {
-    background-color: #1f2937;
-    border-bottom-color: #4b5563;
+    background-color: #2F3339;
+    /* gray-800 */
+    color: white;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+}
+
+.chat-header-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    margin-right: 0.75rem;
+    /* gap-3 */
+}
+
+.chat-header-title {
+    font-size: 1.125rem;
+    /* text-lg */
+    font-weight: 600;
+    /* font-semibold */
+}
+
+.chat-header-status {
+    font-size: 0.875rem;
+    /* text-sm */
+    color: #10B981;
+    /* text-green-400 */
+}
+
+.message-container {
+    flex: 1;
+    height: 100%;
+    /* max-h-96 */
+    padding: 1rem;
+    overflow-y: auto;
+    background-color: #000000;
+    /* bg-black */
+}
+
+.message-item {
+    margin-bottom: 0.5rem;
+    /* mb-2 */
+    border-radius: 9999px;
+    /* rounded-full */
+}
+
+.message-text {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+}
+
+.message-sent {
+    background-color: #129E82;
+    word-break: break-word;
+    white-space: pre-wrap;
+    /* bg-primary-500 */
+    color: white;
+}
+
+.message-received {
+    background-color: #D1D5DB;
+    /* bg-gray-300 */
+    color: black;
 }
 
 .message-input {
-    background-color: #1f2937;
-    border-top-color: #4b5563;
+    padding: 1rem;
+    background-color: #2F3339;
+    /* gray-800 */
+    display: flex;
 }
 
-.message-item .whitespace-pre-wrap {
-    /* Ensures newlines in messages are respected */
-    white-space: pre-wrap;
+.message-input-field {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 9999px;
+    background-color: #2A2F36;
+    /* bg-gunMetal */
+    border: none;
+    color: white;
 }
 
-/* PrimeVue Textarea autoresize height adjustment */
-:deep(.p-inputtextarea-resizable) {
-    max-height: 150px;
-    /* Or your preferred max height */
-    overflow-y: auto !important;
+.message-input-field:hover {
+    border-color: #2D3748;
+    /* border-gray-800 */
+}
+
+.send-button {
+    color: rgb(85, 96, 92);
+    /* text-primary-500 */
+}
+
+.send-button:hover {
+    background-color: transparent;
+    color: #00A451;
+    /* text-pomonaGreen */
 }
 </style>
