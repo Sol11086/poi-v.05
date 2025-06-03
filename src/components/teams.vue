@@ -9,12 +9,6 @@ import { InputText } from "primevue";
 import { content, header } from "@primeuix/themes/aura/accordion";
 import GeneralTeams from "./GeneralTeams.vue";
 
-const apiClient = axios.create({
-    baseURL: 'https://http://localhost:3000', // Asegúrate que esta sea tu URL de ngrok
-    headers: {
-        'ngrok-skip-browser-warning': 'true' // O cualquier valor, comúnmente se usa '69420'
-    }
-});
 
 onMounted(() => {
     equipos.value = [
@@ -47,7 +41,7 @@ const microphoneOn = ref(false);
 const cameraOn = ref(false);
 const audioOn = ref(false);
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app';
 
 const fetchEquipos = async () => {
     const token = localStorage.getItem('user_token');

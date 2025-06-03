@@ -290,7 +290,7 @@ const taskDialogVisible = ref(false);
 const submissionsDialogVisible = ref(false);
 const submitTaskDialogVisible = ref(false);
 
-const API_BASE_URL = 'http://localhost:3000'; // deafult http://localhost:3000
+const API_BASE_URL = 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app'; // deafult http://localhost:3000
 
 // ==============================================
 const props = defineProps({

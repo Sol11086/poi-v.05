@@ -1,847 +1,647 @@
 import 'dotenv/config';
-import express, { response } from "express";
+import express from "express"; // 'response' no se importa directamente así
 import { createServer } from "http";
 import { Server } from "socket.io";
 import crypto from 'crypto';
 import mysql from 'mysql';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
-import cloudinaryPkg from 'cloudinary'; // Renombrado para evitar conflicto si tienes otra variable cloudinary
+import cloudinaryPkg from 'cloudinary';
+
+// --- MANEJADORES GLOBALES DE ERRORES (PONER AL INICIO) ---
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('!!!! ATENCIÓN: Unhandled Rejection at:', promise, 'reason:', reason, 'Stack:', reason instanceof Error ? reason.stack : 'No stack');
+  // En producción, considera terminar el proceso después de loguear, ya que el estado puede ser inconsistente.
+  // process.exit(1); 
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('!!!! ATENCIÓN: Uncaught Exception:', error, 'Stack:', error.stack);
+  // Es crítico terminar el proceso aquí en producción después de loguear.
+  // process.exit(1); 
+});
 
 const app = express();
 
-// Permitir solicitudes desde ngrok (temporalmente acepta todos para pruebas)
-app.use(cors({
-    origin: '*', // Cambiar a dominio estando en producción
-}))
+// --- Configuración CORS ---
+const allowedOrigins = [
+    'https://de8a-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app', // TU FRONTEND NGROK URL
+    'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app', // TU BACKEND NGROK URL
+    'http://localhost:5173' // Para desarrollo local
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS: Origen no permitido: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+  allowedHeaders: "Content-Type, Authorization, ngrok-skip-browser-warning, X-Requested-With",
+  credentials: true,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
 
 // Middleware to verify JWT 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-    if (token == null) return res.sendStatus(401); // if there isn't any token
-
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) return res.sendStatus(401);
     jwt.verify(token, 'tu_clave_secreta', (err, user) => {
         if (err) {
             console.error("JWT verification error:", err);
-            return res.sendStatus(403); // invalid token
+            return res.sendStatus(403);
         }
-        req.user = user; // Add user payload to request
-        next(); // proceed to the next middleware or route handler
+        req.user = user;
+        next();
     });
 };
 
-app.use(express.json()); // Para parsear JSON en el cuerpo de las solicitudes
 const server = createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: '*', // Permitir peticiones desde el frontend
-        methods: ["GET", "POST"],
-    },
+    cors: corsOptions // Aplicar la misma configuración CORS detallada a Socket.IO
 });
-// ------------------ CLAUDINARY -------------------
 
-const { config, uploader, utils } = cloudinaryPkg.v2; // Usar v2
-
-config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME = 'duhrxfco6',
-    api_key: process.env.CLOUDINARY_API_KEY = '727753889996879',
-    api_secret: process.env.CLOUDINARY_API_SECRET = 'ZFlju2cWLzqZyYZylwSTty4U0Wo',
+// ------------------ CLOUDINARY -------------------
+const { config: cloudinaryConfig, uploader: cloudinaryUploader, utils: cloudinaryUtils } = cloudinaryPkg.v2;
+cloudinaryConfig({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'duhrxfco6',
+    api_key: process.env.CLOUDINARY_API_KEY || '727753889996879',
+    api_secret: process.env.CLOUDINARY_API_SECRET || 'ZFlju2cWLzqZyYZylwSTty4U0Wo',
     secure: true,
 });
-console.log("variable cloud name:", process.env.CLOUDINARY_CLOUD_NAME);
-console.log("variable API_key", process.env.CLOUDINARY_API_KEY);
 
-app.post('/api/cloudinary-signature', (req, res) => {
+app.post('/api/cloudinary-signature', (req, res) => { // Mantenido sin authenticateToken según tu último código
     const timestamp = Math.round((new Date).getTime() / 1000);
     const { upload_preset, folder, tags } = req.body;
-
-    if (!upload_preset) {
-        return res.status(400).json({ success: false, error: "Upload preset is required." });
-    }
-
-    let params_to_sign = {
-        timestamp: timestamp,
-        upload_preset: upload_preset,
-        source: 'uw',
-    };
-
+    if (!upload_preset) return res.status(400).json({ success: false, error: "Upload preset is required." });
+    let params_to_sign = { timestamp, upload_preset, source: 'uw' };
     if (folder) params_to_sign.folder = folder;
-    if (tags && Array.isArray(tags)) params_to_sign.tags = tags.join(','); // Tags como string separado por comas
-
+    if (tags && Array.isArray(tags)) params_to_sign.tags = tags.join(',');
     try {
-        const signature = utils.api_sign_request(params_to_sign, process.env.CLOUDINARY_API_SECRET);
-        res.json({
-            signature,
-            timestamp,
-            api_key: process.env.CLOUDINARY_API_KEY, // El widget necesita esto
-            cloud_name: process.env.CLOUDINARY_CLOUD_NAME // El widget necesita esto
-        });
+        const signature = cloudinaryUtils.api_sign_request(params_to_sign, process.env.CLOUDINARY_API_SECRET);
+        res.json({ signature, timestamp, api_key: process.env.CLOUDINARY_API_KEY, cloud_name: process.env.CLOUDINARY_CLOUD_NAME });
     } catch (error) {
         console.error("Error generating Cloudinary signature:", error);
-        res.status(500).json({ success: false, error: "Error generating signature" });
+        if (!res.headersSent) res.status(500).json({ success: false, error: "Error generating signature" });
     }
 });
-
 
 // ---------- CONEXION A LA BASE DE DATOS ----------
-
-// Crear una conexión con la base de datos
 const connection = mysql.createConnection({
-    host: 'localhost',     //host de la base de datos
-    user: 'root',          // usuario de la base de datos
-    password: '',  // contraseña
-    database: 'db_poi_v1', // nombre de la base de datos
-    port: 33065     // puerto donde está corriendo MySQL (por defecto 3306)
+    host: 'localhost', user: 'root', password: '', database: 'db_poi_v1', port: 33065
 });
-
-// Conectar a la base de datos
 connection.connect((err) => {
-    if (err) {
-        console.error('Error al conectar a la base de datos:', err.stack);
-        return;
-    }
+    if (err) { console.error('Error al conectar a la base de datos:', err.stack); return; }
     console.log('Conectado a la base de datos con ID', connection.threadId);
 });
 
-// Obtener usuarios
-connection.query('SELECT * FROM users', (err, results) => {
-    if (err) throw err;
-    console.log('Resultados de la consulta:', results);
-});
+// --- FUNCIONES GENERADORAS DE ID ---
+function generateUserID() { return crypto.randomBytes(5).toString('hex'); }
+function generateTeamID() { return crypto.randomBytes(7).toString('hex'); }
+function generateVARCHAR15ID() { return crypto.randomBytes(8).toString('hex').substring(0, 15); }
 
-
-// Endpoint para la autenticación de usuarios
+// --- RUTAS ---
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-
-    // Buscar el usuario en la base de datos
     connection.query('SELECT * FROM users WHERE username = ?', [username], (err, result) => {
-        if (err) return res.status(500).send('Error al consultar la base de datos');
-
-        // Si no se encuentra el usuario
-        if (result.length === 0) {
-            return res.status(401).send({ success: false, message: 'Usuario no encontrado' });
+        if (err) {
+            console.error("Error en /login query:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            if (!res.headersSent) res.status(500).send({ success: false, message: 'Error al consultar la base de datos' });
+            return;
         }
-
+        if (result.length === 0) {
+            if (!res.headersSent) res.status(401).send({ success: false, message: 'Usuario no encontrado' });
+            return;
+        }
         const user = result[0];
-
-        // Verificar contraseña
-        if (user.password === password) {
-            // Generar un token JWT
+        if (user.password === password) { // Considerar bcrypt
             const token = jwt.sign({ id: user.id, username: user.username }, 'tu_clave_secreta', { expiresIn: '24h' });
-
-            // Imprimir el token en consola para verificar su contenido
-            console.log("Token generado:", token); // Esto te permitirá ver el token completo
-
-            // Enviar el token al frontend
-            return res.status(200).send({ success: true, token });
+            if (!res.headersSent) res.status(200).send({ success: true, token, user: { id: user.id, username: user.username, email: user.email, avatar: user.avatar, reward_points: user.reward_points } });
         } else {
-            return res.status(401).send({ success: false, message: 'Contraseña incorrecta' });
+            if (!res.headersSent) res.status(401).send({ success: false, message: 'Contraseña incorrecta' });
         }
     });
 });
 
-app.post('/api/teams', async (req, res) => { // O router.post('/', ...
+app.post('/api/teams', authenticateToken, async (req, res) => {
     const { team_name, owner_id, image, members, description } = req.body;
-    console.log(req.body);
-
     if (!team_name || !owner_id) {
-        return res.status(400).json({ success: false, error: "El nombre del equipo y el ID del propietario son obligatorios." });
+        if (!res.headersSent) return res.status(400).json({ success: false, error: "Nombre y propietario obligatorios." });
+        return;
     }
-
+    const newTeamId = generateTeamID();
+    const teamImagePath = image || 'default_team_avatar.png';
     try {
-        // Aquí llamarías a tu lógica de creación de equipo que interactúa con la BD.
-        // Esta lógica podría estar en una función en este mismo archivo o en un servicio importado.
-        // Por simplicidad, la lógica de BD iría aquí o en una función llamada desde aquí.
-
-        const newTeamId = generateTeamID();
-        const teamImagePath = image || 'default_team_avatar.png';
-
-        // Ejemplo simplificado (deberías usar transacciones como en el ejemplo anterior de socket):
         await new Promise((resolve, reject) => {
-            connection.beginTransaction(transactionErr => {
+            connection.beginTransaction(async (transactionErr) => {
                 if (transactionErr) return reject(transactionErr);
-
-                const teamQuery = 'INSERT INTO teams (id, team_name, owner_id, image, caption, created_at) VALUES (?, ?, ?, ?, ?, NOW())';
-                connection.query(teamQuery, [newTeamId, team_name, owner_id, teamImagePath, description], (teamInsertErr) => {
-                    if (teamInsertErr) return connection.rollback(() => reject(teamInsertErr));
-
+                try {
+                    await new Promise((resQ, rejQ) => connection.query('INSERT INTO teams (id, team_name, owner_id, image, caption, created_at) VALUES (?, ?, ?, ?, ?, NOW())', [newTeamId, team_name, owner_id, teamImagePath, description], (err) => err ? rejQ(err) : resQ(null)));
+                    
                     const memberInserts = [];
-                    memberInserts.push(new Promise((resMember, rejMember) => { // Propietario
-                        connection.query('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [newTeamId, owner_id, 'admin'], (err) => {
-                            if (err) return rejMember(err);
-                            resMember();
-                        });
-                    }));
-
+                    memberInserts.push(new Promise((resQ, rejQ) => connection.query('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [newTeamId, owner_id, 'admin'], (err) => err ? rejQ(err) : resQ(null))));
                     if (members && members.length > 0) {
-                        members.forEach(userId => {
-                            if (userId !== owner_id) {
-                                memberInserts.push(new Promise((resMember, rejMember) => {
-                                    connection.query('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [newTeamId, userId, 'member'], (err) => {
-                                        if (err) return rejMember(err);
-                                        resMember();
-                                    });
-                                }));
-                            }
+                        members.filter(uid => uid !== owner_id).forEach(userId => {
+                            memberInserts.push(new Promise((resQ, rejQ) => connection.query('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [newTeamId, userId, 'member'], (err) => err ? rejQ(err) : resQ(null))));
                         });
                     }
+                    await Promise.all(memberInserts);
 
-                    Promise.all(memberInserts)
-                        .then(() => {
-                            connection.commit(commitErr => {
-                                if (commitErr) return connection.rollback(() => reject(commitErr));
-                                resolve({ id: newTeamId, team_name, owner_id, image: teamImagePath, members: [owner_id, ...(members || [])] });
-                            });
-                        })
-                        .catch(memberErr => connection.rollback(() => reject(memberErr)));
-                });
-            });
-        })
-            .then(createdTeam => {
-                res.status(201).json({ success: true, team: createdTeam });
-            })
-            .catch(error => {
-                console.error("Error al crear el equipo vía API:", error);
-                res.status(500).json({ success: false, error: "Error interno del servidor al crear el equipo." });
-            });
-
-    } catch (error) {
-        console.error("Error en POST /api/teams:", error);
-        res.status(500).json({ success: false, error: "Error del servidor." });
-    }
-});
-
-app.get('/api/my-teams', authenticateToken, async (req, res) => {
-    const userId = req.user.id; // Extracted from JWT by authenticateToken middleware
-    console.log('GET /api/my-teams - User ID from token:', userId);
-
-    if (!userId) {
-        return res.status(400).json({ success: false, error: "User ID not found in token." });
-    }
-
-    try {
-        // First, get the team IDs the user is a member of
-        const memberOfQuery = 'SELECT team_id FROM team_members WHERE user_id = ?';
-        connection.query(memberOfQuery, [userId], (err, memberResults) => {
-            if (err) {
-                console.error("Error fetching user's team memberships:", err);
-                return res.status(500).json({ success: false, error: "Error fetching user's team memberships." });
-            }
-
-            if (memberResults.length === 0) {
-                return res.status(200).json({ success: true, teams: [] }); // User is not in any teams
-            }
-
-            const teamIds = memberResults.map(row => row.team_id);
-
-            // Now, fetch the details of those teams
-            // Ensure your teams table has all necessary fields like id, team_name, image, caption (description)
-            // The 'image' field in your teams table seems to store the path/URL
-            const teamsQuery = 'SELECT id, team_name, owner_id, image, caption FROM teams WHERE id IN (?)';
-            connection.query(teamsQuery, [teamIds], (teamErr, teamsResults) => {
-                if (teamErr) {
-                    console.error("Error fetching teams details:", teamErr);
-                    return res.status(500).json({ success: false, error: "Error fetching teams details." });
+                    connection.commit(commitErr => {
+                        if (commitErr) return connection.rollback(() => reject(commitErr));
+                        resolve({ id: newTeamId, team_name, owner_id, image: teamImagePath, members: [owner_id, ...(members || [])] });
+                    });
+                } catch (queryError) {
+                    console.error("Error en transacción /api/teams:", JSON.stringify(queryError, Object.getOwnPropertyNames(queryError)));
+                    connection.rollback(() => reject(queryError));
                 }
-                res.status(200).json({ success: true, teams: teamsResults });
             });
         });
+        if (!res.headersSent) res.status(201).json({ success: true, team: { id: newTeamId, team_name, owner_id, image: teamImagePath, members: [owner_id, ...(members || [])] } });
     } catch (error) {
-        console.error("Error in /api/my-teams:", error);
-        res.status(500).json({ success: false, error: "Server error while fetching teams." });
+        console.error("Error catch principal /api/teams:", JSON.stringify(error, Object.getOwnPropertyNames(error)), error.stack);
+        if (!res.headersSent) res.status(500).json({ success: false, error: "Error creando equipo." });
     }
 });
 
-// GET /api/teams/:teamId/channels - Fetches all channels for a specific team
+app.get('/api/my-teams', authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    if (!userId) {
+        if (!res.headersSent) return res.status(400).json({ success: false, error: "User ID not found in token." });
+        return;
+    }
+    const memberOfQuery = 'SELECT team_id FROM team_members WHERE user_id = ?';
+    connection.query(memberOfQuery, [userId], (err, memberResults) => {
+        if (err) {
+            console.error("Error fetching user's team memberships:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            if (!res.headersSent) res.status(500).json({ success: false, error: "Error fetching user's team memberships." });
+            return;
+        }
+        if (memberResults.length === 0) {
+            if (!res.headersSent) res.status(200).json({ success: true, teams: [] });
+            return;
+        }
+        const teamIds = memberResults.map(row => row.team_id);
+        const teamsQuery = 'SELECT id, team_name, owner_id, image, caption FROM teams WHERE id IN (?)';
+        connection.query(teamsQuery, [teamIds], (teamErr, teamsResults) => {
+            if (teamErr) {
+                console.error("Error fetching teams details:", JSON.stringify(teamErr, Object.getOwnPropertyNames(teamErr)));
+                if (!res.headersSent) res.status(500).json({ success: false, error: "Error fetching teams details." });
+                return;
+            }
+            if (!res.headersSent) res.status(200).json({ success: true, teams: teamsResults });
+        });
+    });
+});
+
 app.get('/api/teams/:teamId/channels', authenticateToken, (req, res) => {
     const { teamId } = req.params;
     if (!teamId) {
-        return res.status(400).json({ success: false, error: "Team ID is required." });
+        if (!res.headersSent) return res.status(400).json({ success: false, error: "Team ID is required." });
+        return;
     }
-
     const query = 'SELECT id, team_id, channel_name, created_at FROM team_channels WHERE team_id = ? ORDER BY created_at ASC';
     connection.query(query, [teamId], (err, results) => {
         if (err) {
-            console.error("Error fetching channels for team:", err);
-            return res.status(500).json({ success: false, error: "Error fetching channels." });
+            console.error("Error fetching channels for team:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            if (!res.headersSent) res.status(500).json({ success: false, error: "Error fetching channels." });
+            return;
         }
-        res.status(200).json({ success: true, channels: results });
+        if (!res.headersSent) res.status(200).json({ success: true, channels: results });
     });
 });
 
-// POST /api/teams/:teamId/channels - Creates a new channel in a team (admin only)
 app.post('/api/teams/:teamId/channels', authenticateToken, async (req, res) => {
     const { teamId: routeTeamId } = req.params;
     const { channel_name } = req.body;
     const userId = req.user.id;
 
-    if (!channel_name) {
-        return res.status(400).json({ success: false, error: "Channel name is required." });
-    }
-    if (!routeTeamId) {
-        return res.status(400).json({ success: false, error: "Team ID is required in path." });
-    }
+    if (!channel_name) { if (!res.headersSent) return res.status(400).json({ success: false, error: "Channel name is required." }); return; }
+    if (!routeTeamId) { if (!res.headersSent) return res.status(400).json({ success: false, error: "Team ID is required in path." }); return; }
+    
+    try {
+        const isAdminQuery = 'SELECT role FROM team_members WHERE team_id = ? AND user_id = ?';
+        const adminResults = await new Promise((resolve, reject) => connection.query(isAdminQuery, [routeTeamId, userId], (e, r) => e ? reject(e) : resolve(r)));
 
-    // Step 1: Verify if the user is an admin of this team
-    const isAdminQuery = 'SELECT role FROM team_members WHERE team_id = ? AND user_id = ?';
-    connection.query(isAdminQuery, [routeTeamId, userId], async (adminErr, adminResults) => {
-        if (adminErr) {
-            console.error("Error checking admin role:", adminErr);
-            return res.status(500).json({ success: false, error: "Error verifying user role." });
-        }
-        if (adminResults.length === 0 || adminResults[0].role !== 'admin') {
-            // Also check if the user is the owner of the team as a fallback admin role
-            const isOwnerQuery = 'SELECT owner_id FROM teams WHERE id = ?';
-            connection.query(isOwnerQuery, [routeTeamId], async (ownerErr, ownerResults) => {
-                if (ownerErr) {
-                    console.error("Error checking team owner:", ownerErr);
-                    return res.status(500).json({ success: false, error: "Error verifying team ownership." });
-                }
-                if (ownerResults.length === 0 || ownerResults[0].owner_id !== userId) {
-                    return res.status(403).json({ success: false, error: "User is not an admin or owner of this team." });
-                }
-                // If owner, proceed to create channel
-                await proceedWithChannelCreation();
-            });
-        } else {
-            // If admin, proceed to create channel
-            await proceedWithChannelCreation();
-        }
-    });
-
-    async function proceedWithChannelCreation() {
-        try {
-            // ManejarTeamChannel_Promise uses team_id and channel_name
+        const proceedWithChannelCreation = async () => {
             const channelResult = await ManejarTeamChannel_Promise({ team_id: routeTeamId, channel_name });
             if (channelResult.success) {
-                const getChannelQuery = 'SELECT id, team_id, channel_name, created_at FROM team_channels WHERE id = ?';
-                connection.query(getChannelQuery, [channelResult.channel_id], (err, newChannelDetails) => {
-                    if (err || newChannelDetails.length === 0) {
-                        console.error("Error fetching newly created/found channel details:", err);
-                        return res.status(500).json({ success: false, error: "Channel processed but could not retrieve details." });
-                    }
-
-                    // Optionally: Emit an event to team members about the new channel
-                    // io.to(`team-${routeTeamId}`).emit('channelCreated', newChannelDetails[0]);
-                    // (Clients would need to join `team-${routeTeamId}` rooms upon team selection)
-
-                    res.status(channelResult.created ? 201 : 200).json({
-                        success: true,
-                        message: channelResult.created ? "Channel created successfully." : "Channel already exists.",
-                        channel: newChannelDetails[0],
-                        created: channelResult.created
-                    });
-                });
+                const newChannelDetails = await new Promise((resolve, reject) => connection.query('SELECT id, team_id, channel_name, created_at FROM team_channels WHERE id = ?', [channelResult.channel_id], (e,r) => e ? reject(e) : resolve(r)));
+                if (newChannelDetails.length === 0) throw new Error("Channel processed but could not retrieve details.");
+                if (!res.headersSent) res.status(channelResult.created ? 201 : 200).json({ success: true, message: channelResult.created ? "Channel created." : "Channel exists.", channel: newChannelDetails[0], created: channelResult.created });
             } else {
                 throw new Error(channelResult.error || "Failed to create/get channel.");
             }
-        } catch (error) {
-            console.error("Error in POST /api/teams/:teamId/channels endpoint (proceedWithChannelCreation):", error.message);
-            res.status(500).json({ success: false, error: error.message || "Server error while creating channel." });
+        };
+
+        if (adminResults.length === 0 || adminResults[0].role !== 'admin') {
+            const ownerResults = await new Promise((resolve, reject) => connection.query('SELECT owner_id FROM teams WHERE id = ?', [routeTeamId], (e,r) => e ? reject(e) : resolve(r)));
+            if (ownerResults.length === 0 || ownerResults[0].owner_id !== userId) {
+                if (!res.headersSent) return res.status(403).json({ success: false, error: "User is not an admin or owner." });
+                return;
+            }
+            await proceedWithChannelCreation();
+        } else {
+            await proceedWithChannelCreation();
         }
+    } catch (error) {
+        console.error("Error en POST /api/teams/:teamId/channels:", JSON.stringify(error, Object.getOwnPropertyNames(error)), error.stack);
+        if (!res.headersSent) res.status(500).json({ success: false, error: error.message || "Server error." });
     }
 });
 
-// GET /api/teams/:teamId/members - Fetches members and their roles for a team
 app.get('/api/teams/:teamId/members', authenticateToken, (req, res) => {
     const { teamId } = req.params;
-    const query = `
-        SELECT tm.user_id, u.username, tm.role 
-        FROM team_members tm
-        JOIN users u ON tm.user_id = u.id
-        WHERE tm.team_id = ?
-    `;
+    const query = `SELECT tm.user_id, u.username, tm.role FROM team_members tm JOIN users u ON tm.user_id = u.id WHERE tm.team_id = ?`;
     connection.query(query, [teamId], (err, results) => {
         if (err) {
-            console.error("Error fetching team members:", err);
-            return res.status(500).json({ success: false, error: "Error fetching team members." });
+            console.error("Error fetching team members:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            if (!res.headersSent) res.status(500).json({ success: false, error: "Error fetching team members." });
+            return;
         }
-        res.status(200).json({ success: true, members: results });
+        if (!res.headersSent) res.status(200).json({ success: true, members: results });
     });
 });
 
-// --- TASK ROUTES ---
-
-// POST /api/tasks - Create a new task
-app.post('/api/tasks', authenticateToken, async (req, res) => {
+app.post('/api/tasks', authenticateToken, (req, res) => {
     const { title, description, team_id, due_date, has_reward, notify_by_email } = req.body;
-    const creator_id = req.user.id; // From JWT
-
+    const creator_id = req.user.id;
     if (!title || !team_id) {
-        return res.status(400).json({ success: false, error: "Title and team ID are required." });
+        if (!res.headersSent) return res.status(400).json({ success: false, error: "Title and team ID are required." });
+        return;
     }
-
     const taskId = generateVARCHAR15ID();
-    const taskQuery = `
-        INSERT INTO tasks (id, title, description, team_id, creator_id, due_date, has_reward, notify_by_email, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
-    `;
+    const taskQuery = `INSERT INTO tasks (id, title, description, team_id, creator_id, due_date, has_reward, notify_by_email, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`;
     const values = [taskId, title, description, team_id, creator_id, due_date || null, has_reward || false, notify_by_email || false];
-
     connection.query(taskQuery, values, (err, result) => {
         if (err) {
-            console.error("Error creating task:", err);
-            return res.status(500).json({ success: false, error: "Failed to create task." });
+            console.error("Error creating task:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            if (!res.headersSent) res.status(500).json({ success: false, error: "Failed to create task." });
+            return;
         }
-
-        // TODO: If notify_by_email is true, implement email sending logic here.
-        // This would involve fetching team members' emails and using an email library.
-        // Example:
-        // if (notify_by_email) {
-        //   sendTaskNotificationEmail(team_id, { id: taskId, title, team_name: 'Team Name from DB' });
-        // }
-
-        res.status(201).json({ success: true, message: "Task created successfully.", task_id: taskId, task: { id: taskId, title, team_id, creator_id, due_date, has_reward, status: 'pending' } });
+        if (!res.headersSent) res.status(201).json({ success: true, message: "Task created successfully.", task_id: taskId, task: { id: taskId, title, team_id, creator_id, due_date, has_reward, status: 'pending' } });
     });
 });
 
-// GET /api/teams/:teamId/tasks - Get all tasks for a specific team
-app.get('/api/teams/:teamId/tasks', authenticateToken, async (req, res) => {
+app.get('/api/teams/:teamId/tasks', authenticateToken, (req, res) => {
     const { teamId } = req.params;
     const currentUserId = req.user.id;
-
-    // Optional: Check if user is a member of the team teamId
-    // const memberCheckQuery = 'SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?';
-    // connection.query(memberCheckQuery, [teamId, currentUserId], (memberErr, memberResults) => { ... });
-
-    const tasksQuery = `
-        SELECT t.*, u.username as creator_username,
-               (SELECT COUNT(*) FROM task_submissions ts WHERE ts.task_id = t.id AND ts.user_id = ?) > 0 as completed_by_current_user
-        FROM tasks t
-        JOIN users u ON t.creator_id = u.id
-        WHERE t.team_id = ?
-        ORDER BY t.created_at DESC
-    `;
+    const tasksQuery = `SELECT t.*, u.username as creator_username, (SELECT COUNT(*) FROM task_submissions ts WHERE ts.task_id = t.id AND ts.user_id = ?) > 0 as completed_by_current_user FROM tasks t JOIN users u ON t.creator_id = u.id WHERE t.team_id = ? ORDER BY t.created_at DESC`;
     connection.query(tasksQuery, [currentUserId, teamId], (err, results) => {
         if (err) {
-            console.error("Error fetching tasks for team:", err);
-            return res.status(500).json({ success: false, error: "Error fetching tasks." });
+            console.error("Error fetching tasks for team:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            if (!res.headersSent) res.status(500).json({ success: false, error: "Error fetching tasks." });
+            return;
         }
-        const tasksWithCompletion = results.map(task => ({
-            ...task,
-            is_creator: task.creator_id === currentUserId,
-            completed_by_current_user: !!task.completed_by_current_user // Convert to boolean
-        }));
-        res.status(200).json({ success: true, tasks: tasksWithCompletion });
+        const tasksWithCompletion = results.map(task => ({ ...task, is_creator: task.creator_id === currentUserId, completed_by_current_user: !!task.completed_by_current_user }));
+        if (!res.headersSent) res.status(200).json({ success: true, tasks: tasksWithCompletion });
     });
 });
 
-// DELETE /api/tasks/:taskId - Delete a task (only by creator)
-app.delete('/api/tasks/:taskId', authenticateToken, async (req, res) => {
+app.delete('/api/tasks/:taskId', authenticateToken, (req, res) => {
     const { taskId } = req.params;
     const userId = req.user.id;
-
-    // First, verify if the user is the creator of the task
     connection.query('SELECT creator_id FROM tasks WHERE id = ?', [taskId], (findErr, findResults) => {
-        if (findErr) {
-            console.error("Error finding task for deletion:", findErr);
-            return res.status(500).json({ success: false, error: "Error checking task ownership." });
-        }
-        if (findResults.length === 0) {
-            return res.status(404).json({ success: false, error: "Task not found." });
-        }
-        if (findResults[0].creator_id !== userId) {
-            return res.status(403).json({ success: false, error: "You are not authorized to delete this task." });
-        }
-
-        // Proceed with deletion (task_submissions will be deleted by CASCADE)
+        if (findErr) { if (!res.headersSent) return res.status(500).json({ success: false, error: "Error checking task ownership." }); return; }
+        if (findResults.length === 0) { if (!res.headersSent) return res.status(404).json({ success: false, error: "Task not found." }); return; }
+        if (findResults[0].creator_id !== userId) { if (!res.headersSent) return res.status(403).json({ success: false, error: "You are not authorized to delete this task." }); return; }
         connection.query('DELETE FROM tasks WHERE id = ?', [taskId], (deleteErr, deleteResult) => {
-            if (deleteErr) {
-                console.error("Error deleting task:", deleteErr);
-                return res.status(500).json({ success: false, error: "Failed to delete task." });
-            }
-            if (deleteResult.affectedRows === 0) {
-                return res.status(404).json({ success: false, error: "Task not found or already deleted." });
-            }
-            res.status(200).json({ success: true, message: "Task deleted successfully." });
+            if (deleteErr) { if (!res.headersSent) return res.status(500).json({ success: false, error: "Failed to delete task." }); return; }
+            if (deleteResult.affectedRows === 0) { if (!res.headersSent) return res.status(404).json({ success: false, error: "Task not found or already deleted." }); return; }
+            if (!res.headersSent) res.status(200).json({ success: true, message: "Task deleted successfully." });
         });
     });
 });
 
-// POST /api/tasks/:taskId/submit - Submit/complete a task
+// POST /api/tasks/:taskId/submit - Submit/complete a task (REVISADO Y MEJORADO)
 app.post('/api/tasks/:taskId/submit', authenticateToken, async (req, res) => {
     const { taskId } = req.params;
     const userId = req.user.id;
-    const { notes } = req.body; // Optional notes
+    const { notes, file_info } = req.body; // file_info es enviado por el cliente desde homeworks.vue
 
-    // Optional: Verify user is part of the team to which the task is assigned
-    // ... (query to check team_members based on taskId -> tasks.team_id)
+    console.log(`[POST SUBMIT /api/tasks/${taskId}/submit] User: ${userId}. Notes: "${notes}". File: ${!!file_info}`);
 
-    const submissionId = generateVARCHAR15ID();
-    const submissionQuery = `
-        INSERT INTO task_submissions (id, task_id, user_id, notes, submitted_at)
-        VALUES (?, ?, ?, ?, NOW())
-    `;
-    connection.query(submissionQuery, [submissionId, taskId, userId, notes], (err, result) => {
-        if (err) {
-            if (err.code === 'ER_DUP_ENTRY') { // Unique constraint (task_id, user_id)
-                return res.status(409).json({ success: false, error: "Task already submitted by this user." });
+    try {
+        await new Promise((resolve, reject) => {
+            connection.beginTransaction(async (transactionErr) => {
+                if (transactionErr) {
+                    console.error("[POST SUBMIT TXN] Error iniciando transacción:", JSON.stringify(transactionErr, Object.getOwnPropertyNames(transactionErr)));
+                    return reject(transactionErr);
+                }
+                console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Transacción iniciada.`);
+
+                try {
+                    let multimediaIdToStore = null;
+
+                    // 1. Si hay file_info, insertar en la tabla multimedia
+                    if (file_info && file_info.url) {
+                        console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Procesando archivo adjunto:`, file_info.original_filename);
+                        const newMultimediaId = generateVARCHAR15ID();
+                        const multimediaQuery = `INSERT INTO multimedia (id, task_id, file_path, file_type, original_filename, bytes, public_id, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
+                        const multimediaValues = [newMultimediaId, taskId, file_info.url, file_info.type, file_info.original_filename, file_info.bytes, file_info.public_id];
+                        
+                        await new Promise((resQ, rejQ) => connection.query(multimediaQuery, multimediaValues, (err) => {
+                            if (err) { console.error(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Error insertando en multimedia:`, JSON.stringify(err, Object.getOwnPropertyNames(err))); return rejQ(err); }
+                            multimediaIdToStore = newMultimediaId;
+                            console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Archivo registrado en multimedia con ID:`, multimediaIdToStore);
+                            resQ(null);
+                        }));
+                    }
+
+                    // 2. Insertar en task_submissions
+                    const submissionId = generateVARCHAR15ID();
+                    const submissionQuery = `INSERT INTO task_submissions (id, task_id, user_id, multimedia_id, notes, submitted_at) VALUES (?, ?, ?, ?, ?, NOW())`;
+                    const submissionValues = [submissionId, taskId, userId, multimediaIdToStore, notes];
+                    
+                    await new Promise((resQ, rejQ) => connection.query(submissionQuery, submissionValues, (err) => {
+                        if (err) { console.error(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Error insertando en task_submissions:`, JSON.stringify(err, Object.getOwnPropertyNames(err))); return rejQ(err); }
+                        console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Entrega registrada en task_submissions con ID:`, submissionId);
+                        resQ(null);
+                    }));
+
+                    // 3. Verificar si la tarea tiene recompensa y actualizar puntos del usuario
+                    const taskDetails = await new Promise((resQ, rejQ) => connection.query('SELECT has_reward FROM tasks WHERE id = ?', [taskId], (err, results) => (err ? rejQ(err) : resQ(results))));
+                    
+                    if (taskDetails.length > 0 && taskDetails[0].has_reward) {
+                        console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Tarea tiene recompensa. Actualizando puntos para usuario ${userId}.`);
+                        const updateUserPointsQuery = 'UPDATE users SET reward_points = reward_points + 1 WHERE id = ?';
+                        await new Promise((resQ, rejQ) => connection.query(updateUserPointsQuery, [userId], (err) => {
+                            if (err) { console.error(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Error actualizando puntos de recompensa:`, JSON.stringify(err, Object.getOwnPropertyNames(err))); return rejQ(err); } // No fallar la transacción por esto, pero loguear
+                            console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Puntos de recompensa actualizados para usuario ${userId}.`);
+                            resQ(null);
+                        }));
+                    }
+
+                    // 4. Commit de la transacción
+                    connection.commit((commitErr) => {
+                        if (commitErr) {
+                            console.error(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Error haciendo commit:`, JSON.stringify(commitErr, Object.getOwnPropertyNames(commitErr)));
+                            return connection.rollback(() => reject(commitErr));
+                        }
+                        console.log(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Transacción completada exitosamente.`);
+                        resolve({ submission_id: submissionId, awarded_reward: taskDetails.length > 0 && taskDetails[0].has_reward });
+                    });
+
+                } catch (queryError) { // Error dentro de la lógica de la transacción
+                    console.error(`[POST SUBMIT TXN /api/tasks/${taskId}/submit] Error en query dentro de transacción:`, JSON.stringify(queryError, Object.getOwnPropertyNames(queryError)), queryError.stack);
+                    connection.rollback(() => reject(queryError)); // Rollback y rechazar la promesa principal
+                }
+            });
+        })
+        .then(result => {
+            const message = result.awarded_reward ? "Task submitted successfully and reward point awarded!" : "Task submitted successfully.";
+            console.log(`[POST SUBMIT /api/tasks/${taskId}/submit] Respuesta: ${message}`);
+            if (!res.headersSent) {
+                res.status(201).json({ success: true, message: message, submission_id: result.submission_id });
+            } else {
+                 console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (éxito).`);
             }
-            console.error("Error submitting task:", err);
-            return res.status(500).json({ success: false, error: "Failed to submit task." });
+        })
+        .catch(error => { // Error de la promesa de transacción (begin, commit, rollback, o queryError propagado)
+            console.error(`[POST SUBMIT /api/tasks/${taskId}/submit] Error en catch principal:`, JSON.stringify(error, Object.getOwnPropertyNames(error)), error.stack);
+            if (!res.headersSent) {
+                if (error.code === 'ER_DUP_ENTRY') {
+                    res.status(409).json({ success: false, error: "Task already submitted by this user." });
+                } else {
+                    res.status(500).json({ success: false, error: error.message || "Failed to submit task due to server error." });
+                }
+            } else {
+                console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (error catch).`);
+            }
+        });
+
+    } catch (mainError) { // Error síncrono antes de la promesa
+        console.error(`[POST SUBMIT /api/tasks/${taskId}/submit] Error síncrono principal:`, JSON.stringify(mainError, Object.getOwnPropertyNames(mainError)), mainError.stack);
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, error: "Unexpected server error during task submission." });
+        } else {
+             console.warn(`[POST SUBMIT /api/tasks/${taskId}/submit] Cabeceras ya enviadas (error síncrono principal).`);
         }
-        res.status(201).json({ success: true, message: "Task submitted successfully.", submission_id: submissionId });
-    });
+    }
 });
 
-// GET /api/tasks/:taskId/submissions - Get users who have submitted a task (for creator)
-app.get('/api/tasks/:taskId/submissions', authenticateToken, async (req, res) => {
+
+app.get('/api/tasks/:taskId/submissions', authenticateToken, (req, res) => {
     const { taskId } = req.params;
     const currentUserId = req.user.id;
+    console.log(`[GET /api/tasks/${taskId}/submissions] User: ${currentUserId}`);
 
-    // Verify current user is the task creator
     connection.query('SELECT creator_id FROM tasks WHERE id = ?', [taskId], (taskErr, taskResults) => {
-        if (taskErr) return res.status(500).json({ success: false, error: "Error verifying task." });
-        if (taskResults.length === 0) return res.status(404).json({ success: false, error: "Task not found." });
-        if (taskResults[0].creator_id !== currentUserId) {
-            return res.status(403).json({ success: false, error: "You are not authorized to view submissions for this task." });
+        if (taskErr) {
+            console.error(`[GET SUBMISSIONS /api/tasks/${taskId}] Error 1ra query:`, JSON.stringify(taskErr, Object.getOwnPropertyNames(taskErr)), taskErr.stack);
+            if (!res.headersSent) res.status(500).json({ success: false, error: "Error verificando tarea." });
+            return;
         }
-
+        if (taskResults.length === 0) {
+            if (!res.headersSent) res.status(404).json({ success: false, error: "Tarea no encontrada." });
+            return;
+        }
+        if (taskResults[0].creator_id !== currentUserId) {
+            if (!res.headersSent) res.status(403).json({ success: false, error: "No autorizado." });
+            return;
+        }
         const submissionsQuery = `
-            SELECT ts.user_id, u.username, ts.submitted_at, ts.notes
+            SELECT ts.user_id, u.username, ts.submitted_at, ts.notes,
+                   md.file_path as submission_file_url, md.original_filename as submission_filename, md.file_type as submission_file_type
             FROM task_submissions ts
             JOIN users u ON ts.user_id = u.id
-            WHERE ts.task_id = ?
-            ORDER BY ts.submitted_at DESC
-        `;
+            LEFT JOIN multimedia md ON ts.multimedia_id = md.id
+            WHERE ts.task_id = ? ORDER BY ts.submitted_at DESC`;
         connection.query(submissionsQuery, [taskId], (err, results) => {
             if (err) {
-                console.error("Error fetching task submissions:", err);
-                return res.status(500).json({ success: false, error: "Error fetching submissions." });
+                console.error(`[GET SUBMISSIONS /api/tasks/${taskId}] Error 2da query:`, JSON.stringify(err, Object.getOwnPropertyNames(err)), err.stack);
+                if (!res.headersSent) res.status(500).json({ success: false, error: "Error obteniendo entregas." });
+                return;
             }
-            res.status(200).json({ success: true, submissions: results });
+            if (!res.headersSent) res.status(200).json({ success: true, submissions: results });
         });
     });
 });
 
-// You'll also need an endpoint to fetch teams the user is part of, to populate the dropdown in the task creation dialog.
-// The existing GET /api/my-teams might be suitable if it returns teams where the user can assign tasks (e.g., owner or admin).
-// If not, you might need a new one like GET /api/manageable-teams
 app.get('/api/manageable-teams', authenticateToken, (req, res) => {
     const userId = req.user.id;
-    console.log('GET /api/manageable-teams - User ID from token:', userId);
-    // Query teams where user is owner OR admin in team_members
-    const query = `
-        SELECT t.id, t.team_name
-        FROM teams t
-        LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.user_id = ?
-        WHERE t.owner_id = ? OR tm.role = 'admin'
-        GROUP BY t.id, t.team_name
-        ORDER BY t.team_name ASC
-    `;
+    const query = `SELECT t.id, t.team_name FROM teams t LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.user_id = ? WHERE t.owner_id = ? OR tm.role = 'admin' GROUP BY t.id, t.team_name ORDER BY t.team_name ASC`;
     connection.query(query, [userId, userId], (err, results) => {
         if (err) {
-            console.error("Error fetching manageable teams:", err);
-            return res.status(500).json({ success: false, error: "Error fetching teams." });
+            console.error("Error fetching manageable teams:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+            if (!res.headersSent) res.status(500).json({ success: false, error: "Error fetching teams." });
+            return;
         }
-        res.status(200).json({ success: true, teams: results });
+        if (!res.headersSent) res.status(200).json({ success: true, teams: results });
     });
 });
 
-// connection.end(); // Cerrar la conexión a la base de datos al finalizar
-//----------- FIN DE LA CONFIGURACION DE LA BASE DE DATOS ----------
-// NEW: Handler to get or create a team channel
-async function ManejarTeamChannel_Promise({ team_id, channel_name }) {
+// --- MANEJADORES DE CANALES (PROMESAS) ---
+async function ManejarTeamChannel_Promise({ team_id, channel_name }) { /* ... tu lógica ... */ 
     return new Promise((resolve, reject) => {
-        if (!team_id || !channel_name) {
-            return reject(new Error("team_id and channel_name are required for team channel."));
-        }
-
-        const findQuery = 'SELECT id FROM team_channels WHERE team_id = ? AND channel_name = ?';
-        connection.query(findQuery, [team_id, channel_name], (err, results) => {
-            if (err) {
-                console.error("Error finding team channel:", err);
-                return reject(new Error("Error finding team channel."));
-            }
-            if (results.length > 0) {
-                resolve({ success: true, channel_id: results[0].id, created: false });
-            } else {
-                const newChannelId = generateVARCHAR15ID();// generar 15 caracteres hexadecimales
-                const insertQuery = 'INSERT INTO team_channels (id, team_id, channel_name) VALUES (?, ?, ?)';
-                connection.query(insertQuery, [newChannelId, team_id, channel_name], (insertErr) => {
-                    if (insertErr) {
-                        console.error("Error creating team channel:", insertErr);
-                        let errMsg = "Error creating team channel.";
-                        if (insertErr.errno === 1452) {
-                            errMsg = `Error creating team channel: Team ID ${team_id} does not exist.`;
-                            console.error(errMsg);
-                        }
-                        return reject(new Error(errMsg));
-                    }
-                    console.log(`Team channel created: ${channel_name} in team ${team_id} with ID ${newChannelId}`);
+        if (!team_id || !channel_name) return reject(new Error("team_id and channel_name are required."));
+        connection.query('SELECT id FROM team_channels WHERE team_id = ? AND channel_name = ?', [team_id, channel_name], (err, results) => {
+            if (err) return reject(err);
+            if (results.length > 0) resolve({ success: true, channel_id: results[0].id, created: false });
+            else {
+                const newChannelId = generateVARCHAR15ID();
+                connection.query('INSERT INTO team_channels (id, team_id, channel_name) VALUES (?, ?, ?)', [newChannelId, team_id, channel_name], (insertErr) => {
+                    if (insertErr) return reject(insertErr);
                     resolve({ success: true, channel_id: newChannelId, created: true });
                 });
             }
         });
     });
 }
-
-// NEW: Handler to get or create a private chat
-function ManejarPrivateChannel_Promise({ user1_id, user2_id }) { // Renombrada para indicar que devuelve Promesa
+function ManejarPrivateChannel_Promise({ user1_id, user2_id }) { /* ... tu lógica ... */ 
     return new Promise((resolve, reject) => {
-        if (!user1_id || !user2_id) {
-            // Usamos reject para errores que impiden continuar
-            return reject(new Error("user1_id and user2_id are required."));
-        }
-        if (user1_id === user2_id) {
-            return reject(new Error("Cannot create a private chat with oneself."));
-        }
-
-        const u1 = user1_id < user2_id ? user1_id : user2_id;
-        const u2 = user1_id < user2_id ? user2_id : user1_id;
-
-        const findQuery = 'SELECT id FROM private_chats WHERE (user1_id = ? AND user2_id = ?)';
-        connection.query(findQuery, [u1, u2], (err, results) => {
-            if (err) {
-                console.error("Error finding private chat:", err);
-                return reject(new Error("Error finding private chat."));
-            }
-
-            if (results.length > 0) {
-                // Usamos resolve para el resultado exitoso
-                resolve({ success: true, chat_id: results[0].id, created: false });
-            } else {
+        if (!user1_id || !user2_id) return reject(new Error("user1_id and user2_id are required."));
+        if (user1_id === user2_id) return reject(new Error("Cannot create private chat with oneself."));
+        const u1 = user1_id < user2_id ? user1_id : user2_id, u2 = user1_id < user2_id ? user2_id : user1_id;
+        connection.query('SELECT id FROM private_chats WHERE (user1_id = ? AND user2_id = ?)', [u1, u2], (err, results) => {
+            if (err) return reject(err);
+            if (results.length > 0) resolve({ success: true, chat_id: results[0].id, created: false });
+            else {
                 const newChatId = generateVARCHAR15ID();
-                const insertQuery = 'INSERT INTO private_chats (id, user1_id, user2_id) VALUES (?, ?, ?)';
-                connection.query(insertQuery, [newChatId, u1, u2], (insertErr) => {
-                    if (insertErr) {
-                        console.error("Error creating private chat:", insertErr);
-                        let errMsg = "Error creating private chat.";
-                        if (insertErr.errno === 1452) {
-                            errMsg = `Error creating private chat: One or both User IDs (${u1}, ${u2}) do not exist.`;
-                            console.error(errMsg);
-                        }
-                        return reject(new Error(errMsg));
-                    }
-                    console.log(`Private chat created between ${u1} and ${u2} with id ${newChatId}`);
+                connection.query('INSERT INTO private_chats (id, user1_id, user2_id) VALUES (?, ?, ?)', [newChatId, u1, u2], (insertErr) => {
+                    if (insertErr) return reject(insertErr);
                     resolve({ success: true, chat_id: newChatId, created: true });
                 });
             }
         });
     });
 }
+
 //---------------------Socket.io-------------------------
-// Ya no se usará 'salas' para almacenar mensajes en memoria, se usará la BD.
-// const salas = {};
-
-// Funciones para generar IDs (similar a las existentes)
-function generateUserID() {
-    return crypto.randomBytes(5).toString('hex'); // 10 caracteres
-}
-
-function generateTeamID() {
-    return crypto.randomBytes(7).toString('hex'); // 14 caracteres
-}
-
-function generateVARCHAR15ID() {
-    return crypto.randomBytes(7).toString('hex').substring(0, 15); // 15 caracteres hexadecimales
-}
-
-
-
 io.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
 
-    // Escuchar mensajes, guardarlos en la BD y enviarlos a la sala
     socket.on("sendMessage", async ({ room, message, sender_id, receiver_id, team_id, channel_name, roomType, file_info }) => {
-        // 'room' podría ser el ID si ya se conoce, o podríamos ignorarlo y depender de los otros params.
-        // Para este ejemplo, asumimos que para canales, el cliente podría enviar team_id y channel_name.
-        // Para privados, sender_id (quien envía) y receiver_id (el otro participante).
-
-        if (!sender_id || !message || !roomType) {
-            console.error("Faltan datos para guardar el mensaje (sender_id, message, roomType):", { sender_id, message, roomType });
+        if (!sender_id || !(message || file_info) || !roomType) {
             return socket.emit('messageError', { message: 'Faltan datos esenciales para el mensaje.' });
         }
-
-        const messageId = generateVARCHAR15ID(); // O tu generateVARCHAR15ID
+        const messageId = generateVARCHAR15ID();
         const createdAt = new Date();
         let chatIdValue = null;
         let teamChannelIdValue = null;
-        let actualRoomIdForEmit = room; // Para saber a qué sala de socket.io emitir
+        let actualRoomIdForEmit = room;
 
         try {
-            if (roomType === 'private') {
-                if (!receiver_id) {
-                    console.error("Falta receiver_id para chat privado");
-                    return socket.emit('messageError', { message: 'Falta el destinatario para el chat privado.' });
-                }
-                const privateChatResponse = await ManejarPrivateChannel_Promise({ user1_id: sender_id, user2_id: receiver_id });
-                if (!privateChatResponse.success) throw new Error(privateChatResponse.error || "Failed to get/create private chat");
-                chatIdValue = privateChatResponse.chat_id;
+            await new Promise((resolveTx, rejectTx) => {
+                connection.beginTransaction(async (transactionErr) => {
+                    if (transactionErr) {
+                        console.error("[SOCKET SENDMSG TXN] Error beginTransaction:", JSON.stringify(transactionErr, Object.getOwnPropertyNames(transactionErr)));
+                        return rejectTx(transactionErr);
+                    }
+                    try {
+                        if (roomType === 'private') {
+                            if (!receiver_id) throw new Error('Falta destinatario para chat privado.');
+                            const chatRes = await ManejarPrivateChannel_Promise({ user1_id: sender_id, user2_id: receiver_id });
+                            if (!chatRes.success) throw new Error(chatRes.error || "Fallo al obtener/crear chat privado");
+                            chatIdValue = chatRes.chat_id;
+                            actualRoomIdForEmit = chatIdValue;
+                        } else if (roomType === 'channel') {
+                            if (!team_id || !channel_name) throw new Error('Faltan datos para identificar canal.');
+                            const channelRes = await ManejarTeamChannel_Promise({ team_id, channel_name });
+                            if (!channelRes.success) throw new Error(channelRes.error || "Fallo al obtener/crear canal de equipo");
+                            teamChannelIdValue = channelRes.channel_id;
+                            actualRoomIdForEmit = teamChannelIdValue;
+                        } else {
+                            throw new Error('Tipo de sala no válido.');
+                        }
 
-            } else if (roomType === 'channel') {
-                // El cliente debe enviar team_id y channel_name para canales
-                // O, si 'room' ya es un channel_id validado, se podría usar directamente.
-                // Asumamos que el cliente envía team_id y channel_name
-                if (!team_id || !channel_name) { // O si usas 'room' como ID de canal directo, !room
-                    console.error("Faltan team_id o channel_name para chat de canal");
-                    return socket.emit('messageError', { message: 'Faltan datos para identificar el canal.' });
-                }
-                const teamChannelResponse = await ManejarTeamChannel_Promise({ team_id, channel_name });
-                if (!teamChannelResponse.success) throw new Error(teamChannelResponse.error || "Failed to get/create team channel");
-                teamChannelIdValue = teamChannelResponse.channel_id;
+                        const msgContent = file_info ? (message || `Archivo: ${file_info.original_filename || file_info.name}`) : message;
+                        const msgQuery = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES (?, ?, ?, ?, ?, ?)';
+                        const msgValues = [messageId, sender_id, chatIdValue, teamChannelIdValue, msgContent, createdAt];
+                        await new Promise((resQ, rejQ) => connection.query(msgQuery, msgValues, (e) => e ? rejQ(e) : resQ(null)));
 
+                        if (file_info && file_info.url) {
+                            const mediaId = generateVARCHAR15ID();
+                            const mediaQuery = 'INSERT INTO multimedia (id, message_id, file_path, file_type, original_filename, bytes, public_id, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+                            const mediaValues = [mediaId, messageId, file_info.url, file_info.type, file_info.original_filename || file_info.name, file_info.bytes, file_info.public_id, createdAt];
+                            await new Promise((resQ, rejQ) => connection.query(mediaQuery, mediaValues, (e) => e ? rejQ(e) : resQ(null)));
+                        }
 
-            } else {
-                console.error("Tipo de sala no válido:", roomType);
-                return socket.emit('messageError', { message: 'Tipo de sala no válido proporcionado.' });
-            }
-
-            // --- Lógica común para insertar el mensaje ---
-            const messageContent = file_info ? (message || `Archivo: ${file_info.name}`) : message;
-            const messageQuery = 'INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES (?, ?, ?, ?, ?, ?)';
-            const messageValues = [messageId, sender_id, chatIdValue, teamChannelIdValue, messageContent, createdAt];
-
-
-            await new Promise((resolve, reject) => {
-                connection.query(messageQuery, messageValues, (err, result) => err ? reject(err) : resolve(result));
-            });
-
-            let multimediaRecordId = null;
-            if (file_info && file_info.url) {
-                multimediaRecordId = generateVARCHAR15ID(); // ID para la tabla multimedia
-                const multimediaQuery = 'INSERT INTO multimedia (id, message_id, file_path, file_type, original_filename, bytes, public_id, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-                const multimediaValues = [
-                    multimediaRecordId,
-                    messageId, // FK al mensaje que acabamos de crear
-                    file_info.url,
-                    file_info.type,
-                    file_info.name,
-                    file_info.size,
-                    file_info.public_id,
-                    createdAt
-                ];
-                await new Promise((resolve, reject) => {
-                    connection.query(multimediaQuery, multimediaValues, (err, result) => err ? reject(err) : resolve(result));
-                });
-            }
-            await new Promise((resolve, reject) => connection.commit(err => err ? reject(err) : resolve()));
-
-            // --- Lógica común para emitir el mensaje ---
-            const userResults = await new Promise((resolve, reject) => {
-                connection.query('SELECT username FROM users WHERE id = ?', [sender_id], (errUser, results) => {
-                    if (errUser) return reject(new Error("Error fetching username"));
-                    resolve(results);
+                        connection.commit(commitErr => {
+                            if (commitErr) return connection.rollback(() => rejectTx(commitErr));
+                            resolveTx(null);
+                        });
+                    } catch (innerError) {
+                        console.error("[SOCKET SENDMSG TXN] Error en query dentro de transacción:", JSON.stringify(innerError, Object.getOwnPropertyNames(innerError)), innerError.stack);
+                        connection.rollback(() => rejectTx(innerError));
+                    }
                 });
             });
 
+            const userResults = await new Promise((resolve, reject) => connection.query('SELECT username FROM users WHERE id = ?', [sender_id], (err, res) => err ? reject(err) : resolve(res)));
             const username = (userResults.length === 0) ? 'Desconocido' : userResults[0].username;
             const newMessageForRoom = {
-                id: messageId,
-                user: { id: sender_id, username: username },
-                message: messageContent,
-                room: actualRoomIdForEmit,
-                roomType: roomType,
-                created_at: createdAt,
+                id: messageId, user: { id: sender_id, username }, 
+                message: file_info ? (message || `Archivo: ${file_info.original_filename || file_info.name}`) : message,
+                room: actualRoomIdForEmit, roomType, created_at: createdAt, 
                 time: createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                file_info: file_info || null, // Adjuntar la info del archivo al mensaje emitido
+                file_info: file_info || null,
             };
-
-            io.to(actualRoomIdForEmit).emit("receiveMessage", newMessageForRoom); // Emitir a la sala correcta
-            console.log("Mensaje (con archivo si aplica) enviado a la sala:", actualRoomIdForEmit);
+            io.to(actualRoomIdForEmit).emit("receiveMessage", newMessageForRoom);
+            console.log(`[SOCKET SENDMSG] Mensaje enviado a sala ${actualRoomIdForEmit}`);
 
         } catch (error) {
-            await new Promise((resolve) => connection.rollback(() => resolve()));
-            console.error("Error procesando sendMessage (con archivo):", error.message);
-            socket.emit('messageError', { message: error.message || 'Error procesando el mensaje.' });
+            console.error("[SOCKET SENDMSG] Error catch principal:", JSON.stringify(error, Object.getOwnPropertyNames(error)), error.stack);
+            socket.emit('messageError', { message: error.message || 'Error procesando mensaje.' });
         }
     });
 
-    // Unirse a una sala (o múltiples salas)
     socket.on("joinAllRooms", (roomIds) => {
         if (Array.isArray(roomIds)) {
-            roomIds.forEach((room) => {
-                socket.join(room);
-                console.log(`Usuario ${socket.id} se unió a la sala: ${room}`);
-            });
-        } else if (typeof roomIds === 'string') { // Para unirse a una sola sala
+            roomIds.forEach((room) => { if(room) socket.join(room); });
+        } else if (typeof roomIds === 'string' && roomIds) {
             socket.join(roomIds);
-            console.log(`Usuario ${socket.id} se unió a la sala: ${roomIds}`);
         }
+        console.log(`Usuario ${socket.id} intentó unirse a salas:`, roomIds);
     });
 
-    // Cargar mensajes anteriores desde la BD
     socket.on("loadMessages", ({ room, roomType }) => {
-        // IMPORTANTE: El cliente debe enviar 'roomType' ('private' o 'channel')
-        if (!room || !roomType) {
-            console.error("Faltan datos para cargar mensajes:", { room, roomType });
-            socket.emit("previousMessages", []); // Enviar array vacío o un error
-            return;
-        }
-
+        if (!room || !roomType) { socket.emit("previousMessages", []); return; }
         let queryMessages;
-        const queryParams = [room];
-
-        // Se une la tabla messages (m) con users (u) y opcionalmente con multimedia (md)
-        const baseSelect = `
-            SELECT
-                m.id, m.content, m.created_at, m.sender_id, u.username,
-                md.id as multimedia_id, md.file_path, md.file_type,
-                md.original_filename, md.bytes, md.public_id
-            FROM messages m
-            JOIN users u ON m.sender_id = u.id
-            LEFT JOIN multimedia md ON m.id = md.message_id 
-        `; // LEFT JOIN para incluir mensajes sin archivos
-
-        if (roomType === 'private') {
-            queryMessages = `${baseSelect} WHERE m.chat_id = ? ORDER BY m.created_at ASC`;
-        } else if (roomType === 'channel') {
-            queryMessages = `${baseSelect} WHERE m.team_channel_id = ? ORDER BY m.created_at ASC`;
-        } else {
-            console.error("Tipo de sala no válido para cargar mensajes:", roomType);
-            socket.emit("previousMessages", []);
-            return;
-        }
-
-        connection.query(queryMessages, queryParams, (err, results) => {
-            if (err) {
-                console.error('Error al cargar mensajes desde la BD (con multimedia):', err);
-                socket.emit("previousMessages", []);
-                return;
-            }
-
-            const formattedMessages = results.map(msg => {
-                let file_info = null;
-                if (msg.multimedia_id) { // Si hay un archivo adjunto
-                    file_info = {
-                        id: msg.multimedia_id, // Podrías necesitarlo
-                        url: msg.file_path,
-                        type: msg.file_type,
-                        name: msg.original_filename,
-                        size: msg.bytes,
-                        public_id: msg.public_id
-                    };
-                }
-                return {
-                    id: msg.id,
-                    user: { id: msg.sender_id, username: msg.username },
-                    message: msg.content,
-                    room: room, // El ID de la sala original
-                    roomType: roomType,
-                    created_at: msg.created_at,
-                    time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    file_info: file_info // Adjuntar file_info aquí
-                };
-            });
+        const baseSelect = `SELECT m.id, m.content, m.created_at, m.sender_id, u.username, md.id as multimedia_id, md.file_path, md.file_type, md.original_filename, md.bytes, md.public_id FROM messages m JOIN users u ON m.sender_id = u.id LEFT JOIN multimedia md ON m.id = md.message_id`;
+        if (roomType === 'private') queryMessages = `${baseSelect} WHERE m.chat_id = ? ORDER BY m.created_at ASC`;
+        else if (roomType === 'channel') queryMessages = `${baseSelect} WHERE m.team_channel_id = ? ORDER BY m.created_at ASC`;
+        else { socket.emit("previousMessages", []); return; }
+        
+        connection.query(queryMessages, [room], (err, results) => {
+            if (err) { console.error("Error loadMessages:", JSON.stringify(err, Object.getOwnPropertyNames(err))); socket.emit("previousMessages", []); return; }
+            const formattedMessages = results.map(msg => ({
+                id: msg.id, user: { id: msg.sender_id, username: msg.username }, message: msg.content,
+                room, roomType, created_at: msg.created_at, time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                file_info: msg.multimedia_id ? { id: msg.multimedia_id, url: msg.file_path, type: msg.file_type, name: msg.original_filename, size: msg.bytes, public_id: msg.public_id } : null
+            }));
             socket.emit("previousMessages", formattedMessages);
-            console.log("[server] intentando leer mensajes (con multimedia) en sala:", room);
         });
     });
 
-    socket.on("disconnect", () => {
-        console.log("Usuario desconectado:", socket.id);
-        // Aquí podrías querer manejar la lógica de 'leaveAllRooms' si es necesario,
-        // pero necesitarías saber de qué salas sacar al usuario.
+    socket.on("disconnect", () => console.log("Usuario desconectado:", socket.id));
+});
+
+// --- MANEJADOR DE ERRORES GLOBAL DE EXPRESS (AL FINAL) ---
+app.use((err, req, res, next) => {
+    console.error("--- ERROR EXPRESS NO MANEJADO ---");
+    console.error("Ruta:", req.method, req.originalUrl);
+    // Evitar JSON.stringify en el error completo si puede ser circular o muy grande
+    console.error("Mensaje Error:", err.message); 
+    console.error("Stack:", err.stack);
+    
+    if (res.headersSent) {
+        console.error("Manejador de errores Express: Cabeceras ya enviadas.");
+        return next(err); // Delegar al manejador por defecto de Express
+    }
+    res.status(err.status || 500).json({
+        success: false, 
+        error: err.message || 'Error interno del servidor.'
     });
 });
 
 server.listen(3000, () => {
     console.log("Servidor corriendo en http://localhost:3000");
 });
-
-
-// No cierres la conexión aquí si el servidor va a seguir corriendo
-// connection.end(); 

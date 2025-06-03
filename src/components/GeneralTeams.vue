@@ -35,7 +35,9 @@
         </div>
         <div class="messages-list" ref="messagesContainer">
           <div v-for="msg in messages" :key="msg.id" class="message-item">
-            <span class="message-sender">{{ msg.user.username }}:</span>
+            <Button class="message-sender justify-start" variant="link" @click="togglePopover($event, selectedChat)">
+              {{ msg.user.username }}:
+            </Button>
             <!-- Cloudinary Media-->
             <div v-if="msg.file_info" class="file-message-content">
               <p class="message-content">{{ msg.message }}</p>
@@ -85,6 +87,35 @@
   <div v-else-if="isLoading && currentTeamId" class="loading-placeholder">
     <p>Cargando datos del equipo...</p>
   </div>
+
+  <Popover ref="op" class="w-1/5 rounded-xl m-2">
+    <div class="bg-[#1f2329] rounded-lg p-5">
+      <div class="flex gap-4 items-center mb-4">
+        <img :src="popoverUser?.avatar" class=" bg w-10 h-10 rounded-full" />
+        <div class="grid ">
+          <span class="text-white">{{ popoverUser?.name }}</span>
+          <p class="text-[#129E82]">{{ popoverUser.status || 'Desconectado' }}</p>
+        </div>
+      </div>
+      <div class="mb-4">
+        <span class="text-gray-400">sol@gmail.com</span>
+      </div>
+      <div class="flex">
+        <div class="bg-[#180e3b] flex gap-2 rounded-l-full p-1 items-center justify-center">
+          <i class="pi pi-star-fill text-yellow-300 ml-2"></i>
+          <span class="text-white mr-2">
+            Recompensas
+          </span>
+        </div>
+        <div class="bg-[#9F86F9] rounded-r-full flex items-center justify-center">
+          <span class="text-black p-2">
+            15
+          </span>
+        </div>
+      </div>
+    </div>
+  </Popover>
+
 </template>
 
 <script setup>
@@ -95,6 +126,7 @@ import { parseJwt } from '@/utils/jwt'; //
 import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
 import ManualCldImage from '@/components/ManualCldImage.vue'; // Ajusta la ruta si es necesario
 import ManualCldVideo from '@/components/ManualCldVideo.vue';
+import Popover from 'primevue/popover';
 import axios from 'axios';
 
 const router = useRoute();
@@ -114,7 +146,7 @@ const isLoading = ref(false);
 const isLoadingChannels = ref(false);
 const isLoadingMessages = ref(false);
 
-const API_BASE_URL = 'http://localhost:3000'; // Ensure this matches your backend URL
+const API_BASE_URL = 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app'; // Ensure this matches your backend URL
 const token = localStorage.getItem('user_token');// token de usuario
 
 const props = defineProps({
@@ -180,6 +212,14 @@ const handleChatUploadError = (error) => {
   alert(`Error uploading file: ${error.message || 'Unknown error'}`);
 };
 // ============================================
+const popoverUser = ref(null);
+const op = ref();
+const togglePopover = (event, user) => {
+  popoverUser.value = user;
+  op.value.toggle(event);
+}
+
+// ------------------------------------------
 const scrollToBottom = () => {
   nextTick(() => {
     if (messagesContainer.value) {

@@ -50,10 +50,13 @@ const username = ref('');
 
 onMounted(() => {
   const token = localStorage.getItem('user_token'); // <-- usa el nombre correcto
+  const userDataString = localStorage.getItem('userData');
+  const UserData = JSON.parse(userDataString); // Convertir el JSON string de nuevo a objeto
   if (token) {
     try {
       const decoded = parseJwt(token);
       console.log("Token decodificado:", decoded);
+      console.log("Datos del usuario (parseados):", UserData);
       username.value = decoded.username || 'Usuario';
     } catch (err) {
       console.error("Token inválido:", err);

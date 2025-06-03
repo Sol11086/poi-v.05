@@ -5,6 +5,7 @@ import socket from "@/utils/socket.js";
 import CloudinaryUploadButton from '@/components/CloudinaryUploadButton.vue';
 import ManualCldImage from '@/components/ManualCldImage.vue'; // Ajusta la ruta si es necesario
 import ManualCldVideo from '@/components/ManualCldVideo.vue';
+import Popover from 'primevue/popover';
 import { parseJwt } from '@/utils/jwt.js';
 
 socket.on("connect", () => {
@@ -17,8 +18,8 @@ const user_id = parseJwt(token).id;
 console.log(user_id);
 
 const chats = ref([
-    { id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private' },
-    { id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private' },
+    { id: '659fec9d7e9978', user_id: 'SolEcito16', name: 'Sol', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg', type: 'private', status:'en línea' },
+    { id: 'fa5c9e8de8f7da', user_id: 'JellyFish8', name: 'Jelly', avatar: 'https://i.pinimg.com/474x/27/96/cb/2796cbfdd164a96a581cc272a313548b.jpg', type: 'private', status: 'en línea'},
 ]);
 
 const selectedChat = ref(null);
@@ -91,7 +92,13 @@ const handleChatUploadError = (error) => {
     alert(`Error uploading file: ${error.message || 'Unknown error'}`);
 };
 // ==========================
-
+const popoverUser = ref(null);
+const op = ref();
+const togglePopover = (event, user) => {
+  popoverUser.value = user;
+  op.value.toggle(event);
+}
+//--------------------------
 // Salir de la sala - implementar cuando el usuario abandone el grupo
 // const leaveRoom = (room) => {
 //   socket.emit("leaveRoom", room);
@@ -189,7 +196,7 @@ function goToProfile() {
         <div class="chat-area">
             <!-- Header del chat -->
             <div v-if="selectedChat" class="chat-header">
-                <img :src="selectedChat.avatar" class="chat-header-avatar" @click="goToProfile" />
+                <img :src="selectedChat.avatar" class="chat-header-avatar"   @click="togglePopover($event, selectedChat)" />
                 <div>
                     <h2 class="chat-header-title">{{ selectedChat.name }}</h2>
                     <p class="chat-header-status">En línea</p>
@@ -242,6 +249,34 @@ function goToProfile() {
             </div>
         </div>
     </div>
+
+     <Popover ref="op" class="w-1/5 rounded-xl m-2">
+        <div class="bg-[#1f2329] rounded-lg p-5">
+            <div class="flex gap-4 items-center mb-4">
+                <img :src="popoverUser?.avatar" class=" bg w-10 h-10 rounded-full" />
+                <div class="grid ">
+                    <span class="text-white">{{ popoverUser?.name }}</span>
+                    <p class="text-[#129E82]">{{ popoverUser.status || 'Desconectado' }}</p>
+                </div>
+            </div>
+            <div class="mb-4">
+                <span class="text-gray-400">sol@gmail.com</span>
+            </div>
+            <div class="flex">
+                <div class="bg-[#180e3b] flex gap-2 rounded-l-full p-1 items-center justify-center">
+                    <i class="pi pi-star-fill text-yellow-300 ml-2"></i>
+                    <span class="text-white mr-2">
+                        Recompensas
+                    </span>
+                </div>
+                <div class="bg-[#9F86F9] rounded-r-full flex items-center justify-center">
+                    <span class="text-black p-2">
+                        15
+                    </span>
+                </div>
+            </div>
+        </div>
+    </Popover>
 </template>
 
 <style scoped>

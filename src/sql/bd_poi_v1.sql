@@ -9,6 +9,7 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     avatar VARCHAR(255),
+    reward_points INT DEFAULT 0,
     status ENUM('online', 'offline', 'busy') DEFAULT 'offline',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -82,21 +83,6 @@ CREATE TABLE tasks (
     FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
 ); 
 
--- Tabla para saber quién subió tarea
-CREATE TABLE task_submissions (
-    id VARCHAR(15) PRIMARY KEY,
-    task_id VARCHAR(15) NOT NULL,
-    user_id VARCHAR(10) NOT NULL,                     -- Usuario que completó la tarea
-    multimedia_id VARCHAR(15) NULL,
-    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    notes TEXT,                                       
-    UNIQUE (task_id, user_id),                        -- Asegurarse que el usuario sólo puedar subirlo 1 vez
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (multimedia_id) REFERENCES multimedia(id) ON DELETE SET NULL
-);
-
-
 -- Tabla de Archivos Multimedia
 CREATE TABLE multimedia (
     id VARCHAR(15) PRIMARY KEY,
@@ -110,6 +96,20 @@ CREATE TABLE multimedia (
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+-- Tabla para saber quién subió tarea
+CREATE TABLE task_submissions (
+    id VARCHAR(15) PRIMARY KEY,
+    task_id VARCHAR(15) NOT NULL,
+    user_id VARCHAR(10) NOT NULL,                     -- Usuario que completó la tarea
+    multimedia_id VARCHAR(15) NULL,
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,                                       
+    UNIQUE (task_id, user_id),                        -- Asegurarse que el usuario sólo puedar subirlo 1 vez
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (multimedia_id) REFERENCES multimedia(id) ON DELETE SET NULL
 );
 
 
@@ -147,15 +147,7 @@ CREATE TABLE video_call_participants (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Tabla de Recompensas
-CREATE TABLE rewards (
-    id VARCHAR(15) PRIMARY KEY,
-    user_id VARCHAR(10) NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    descrip TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+
 -- SELECT * FROM private_chats
 -- SELECT * FROM messages
 -- ALTER TABLE users CHANGE COLUMN password_hash password VARCHAR(255) NOT NULL;
@@ -164,4 +156,6 @@ CREATE TABLE rewards (
 -- INSERT INTO messages (id, sender_id, chat_id, team_channel_id, content, created_at) VALUES ('8867566ed6ec51', 'VeckThor15', NULL, 3, 'ola grupo', '2025-05-20 06:11:03.211')
 
 -- CONSULTAS
-INSERT INTO users (id, username, email, password, avatar) VALUES ('VEK15', 'Veck MR', 'victormolru15@gmail.com', 'password123', 'default_avatar.png');
+INSERT INTO users (id, username, email, password, avatar) VALUES ('VeckThor15', 'Veck MR', 'victormolru15@gmail.com', 'password123', 'default_avatar.png');
+INSERT INTO users (id, username, email, password, avatar) VALUES ('JellyFish8', 'Jelly', 'jelly@gmail.com', 'password123', 'default_avatar.png');
+INSERT INTO users (id, username, email, password, avatar) VALUES ('SolEcito16', 'Sol', 'sol@gmail.com', 'password123', 'default_avatar.png');

@@ -33,7 +33,7 @@ export default {
     async handleLogin() {
       try {
         // dafault http://localhost:3000/login -- Cambiar por el puerto que se esté usando (ngrok o vite)
-        const response = await axios.post('http://localhost:3000/login', {
+        const response = await axios.post('https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app/login', {
           username: this.username,
           password: this.password,
         });
@@ -41,6 +41,7 @@ export default {
         if (response.data.success) {
           // Almacena el token o información del usuario en el localStorage o en Vuex
           localStorage.setItem('user_token', response.data.token);
+          localStorage.setItem('userData', JSON.stringify(response.data.user));
 
           // Redirigir al usuario a la página principal o al dashboard
           this.$router.push('/home');

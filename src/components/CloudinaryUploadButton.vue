@@ -20,6 +20,8 @@ const emit = defineEmits(['upload-success', 'upload-error']);
 
 const widgetInstance = ref(null);
 
+const API_BASE_URL = 'https://fcea-2806-230-4043-c126-7dfb-b81d-b40-eef7.ngrok-free.app'; // deafult http://localhost:3000
+
 // Cargar script del widget de Cloudinary dinámicamente
 onMounted(() => {
   if (!window.cloudinary) {
@@ -38,7 +40,7 @@ const handleUpload = async () => {
     return;
   }
   try {
-    const sigResponse = await axios.post('/api/cloudinary-signature', { // Endpoint del backend
+    const sigResponse = await axios.post(API_BASE_URL+'/api/cloudinary-signature', { // Endpoint del backend
       upload_preset: props.uploadPreset,
       folder: props.folder,
       tags: props.tags
