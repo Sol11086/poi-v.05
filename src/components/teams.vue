@@ -56,6 +56,9 @@ peer.on('call', call => {
     })
 })
 
+const visibleCreateRoom = ref(false);
+const visibleVideoCall = ref(false);
+
 const startCall = async () => {
     try {
         // Obtener acceso a la cámara y micrófono
@@ -91,27 +94,25 @@ const startCall = async () => {
 };
 
 function handleCallClick(id: number) {
+    visibleVideoCall = true;
     remotePeerId.value = id;
     callId.value = id;
-    cameraOn.value = true; // Opcional si quieres encenderla automáticamente
+    cameraOn.value = true; 
     microphoneOn.value = true;
     startCall(id);
 }
 
 function endCall() {
-    // Detener la cámara y el micrófono
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
 
-    // (Opcional) cerrar la conexión peer si estás usando PeerJS
     if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
     }
 
-    // Limpiar referencias del video
     if (localVideoRef.value) {
         localVideoRef.value.srcObject = null;
     }
@@ -119,11 +120,9 @@ function endCall() {
         remoteVideoRef.value.srcObject = null;
     }
 
-    // Apagar los flags de cámara y micrófono
     cameraOn.value = false;
     microphoneOn.value = false;
 
-    // Cerrar el diálogo (esto también oculta el modal)
     callId.value = null;
 }
 
@@ -247,6 +246,7 @@ function handleBack() {
     showGeneral.value = false
     emit('backToHome') // Opcional si quieres que Home sepa
 }
+
 </script>
 
 <template>
@@ -256,8 +256,13 @@ function handleBack() {
             <i class="pi pi-users"></i>
             Equipos
         </span>
-        <Button label="Crear nuevo equipo" size="small" @click="showCreateTeam = true" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
+        <div class="flex gap-4 items-center justify-center">
+            <Button icon="pi pi-video" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                class="text-[#129E82] p-1"  @click="visibleCreateRoom = true"
+                v-tooltip.bottom="'Iniciar Video llamada'" />
+            <Button label="Crear nuevo equipo" size="small" @click="showCreateTeam = true" class="bg-transparent text-sm text-[#9F86F9] border-[#9F86F9] border-2 p-2 
         rounded-full hover:bg-[#9F86F9] hover:text-white" />
+        </div>
     </div>
     <div class="h-full">
         <div v-if="!generalId" class="grid grid-cols-3 gap-6 p-6 overflow-y-hidden">
@@ -271,103 +276,7 @@ function handleBack() {
                     class="flex justify-center items-center mt-2 font-bold text-[#9F86F9] hover:text-[#463583]">{{
                         equipo.nombre }}</Button>
                 <p class="flex justify-center items-center mt-2 text-gray-200 text-center">{{ equipo.description }}</p>
-                <div class="justify-center flex gap-4 mt-2">
-                    <Button icon="pi pi-phone" severity="secondary" variant="text" rounded aria-label="Bookmark"
-                        class="text-[#129E82] p-1" @click="activeCallTeamId = equipo.id"
-                        v-tooltip.bottom="'Iniciar llamada'" />
-                </div>
 
-
-                <Dialog :visible="activeCallTeamId === equipo.id"
-                    @update:visible="newValue => { if (!newValue) activeCallTeamId = null; }" modal class="w-1/4 h-fit"
-                    :style="{ backgroundColor: transparent }" pt:root:class="!border-0 !bg-transparent">
-                    <template #container="{ closeCallback }">
-                        <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
-                            <span class="text-gray-500"> Comenzar llamada </span>
-                            <div class="relative w-fit h-fit">
-                                <Button icon="pi pi-phone" @click="handleCallClick"
-                                    class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
-                                <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
-                                    @click="handleCallClick"></i>
-                            </div>
-                            <Button icon="pi pi-times" @click="activeCallTeamId = false"
-                                class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
-                        </div>
-                    </template>
-                </Dialog>
-
-                <Dialog :visible="callId === equipo.id" @update:visible="newValue => { if (!newValue) callId = null; }"
-                    class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
-                        content: {
-                            class: 'p-4 h-full overflow-y-auto'
-                        }
-                    }">
-                    <template #header>
-                        <div class="flex justify-between items-center">
-                            <div class="p-4 flex justify-between items-center">
-                                <span class="text-white mr-2 font-bold">Titulo de la llamada</span>
-                                <Button icon="pi pi-comment" @click="visibleRight = !visibleRight" severity="secondary"
-                                    variant="text" rounded aria-label="Bookmark"
-                                    :class="visibleRight ? 'text-[#129E82]' : 'text-[#646466]'"
-                                    v-tooltip.bottom="'Abrir chat grupal'" />
-                                <Button icon="pi pi-microphone" severity="secondary" variant="text" rounded
-                                    aria-label="Bookmark" @click="microphoneOn = !microphoneOn"
-                                    :class="microphoneOn ? 'text-[#129E82]' : 'text-[#646466]'" />
-                                <Button icon="pi pi-camera" severity="secondary" variant="text" rounded
-                                    aria-label="Bookmark" @click="cameraOn = !cameraOn"
-                                    :class="cameraOn ? 'text-[#129E82]' : 'text-[#646466]'" class="text-[#129E82]" />
-                                <Button icon="pi pi-headphones" severity="secondary" variant="text" rounded
-                                    aria-label="Bookmark" class="text-[#129E82]" @click="audioOn = !audioOn"
-                                    :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
-                            </div>
-                            <div>
-                                <Button severity="secondary" @click="endCall" label="Colgar llamada" class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm 
-                                    font-light hover:bg-[#8a2222] hover:text-white" />
-                            </div>
-                            <div>
-                                <span class="text-white font-bold">Sala: {{ roomId }}</span>
-                                <Button label="Copiar ID" @click="copyToClipboard(roomId)" icon="pi pi-copy"
-                                    class="text-xs text-[#9F86F9]" />
-                            </div>
-                        </div>
-                    </template>
-                    <div class="flex h-full">
-                        <div v-if="visibleRight" class="relative z-10 bg-[#04293C] h-full w-1/3">
-                            <div class="h-10/12">
-                                <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#081d27] p-4">
-                                    <i class="pi pi-comment"></i>
-                                    <div>
-                                        <p class="chat-header-status">Chat grupal</p>
-                                    </div>
-                                </div>
-                                <div class="h-full bg-[#030d11] p-4">
-                                    <div v-for="msg in messages" :key="msg.id"
-                                        :class="{ 'text-right': msg.user === username }" class="message-item">
-                                        <p class="message-text"
-                                            :class="msg.user === username ? 'message-sent' : 'message-received'">
-                                            {{ msg.message }}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="bg-[#081d27] flex items-center justify-between p-4">
-                                    <InputText v-model="newMessage" @keyup.enter="sendMessage"
-                                        placeholder="Escribe un mensaje..." class="bg-[#030d11] text-white p-2" />
-                                    <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text"
-                                        rounded class="hover:text-[#129E82]" />
-                                </div>
-                            </div>
-                        </div>
-                        <video ref="localVideoRef" autoplay muted v-if="cameraOn"
-                            class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
-                            Tu camara
-                        </video>
-                        <video ref="remoteVideoRef" autoplay
-                            class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
-                            <span class="text-xl"> En espera </span>
-                            <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
-                        </video>
-                    </div>
-                </Dialog>
             </div>
         </div>
         <div v-else class="h-full">
@@ -376,8 +285,6 @@ function handleBack() {
             </div>
         </div>
     </div>
-
-
 
     <Dialog v-model:visible="showCreateTeam" modal class="w-1/3 h-fit p-2" :style="{ backgroundColor: '#04293C' }">
         <template #header>
@@ -422,6 +329,96 @@ function handleBack() {
                 rounded-full hover:bg-[#9F86F9] hover:text-white" />
             <Button label="Cancelar" size="small" @click="showCreateTeam = false" class="bg-transparent text-sm text-[#C13030] border-[#C13030] border-2 p-2 
                 rounded-full hover:bg-[#C13030] hover:text-white" />
+        </div>
+    </Dialog>
+
+    <Dialog  v-model:visible="visibleCreateRoom" modal class="w-1/4 h-fit"
+        :style="{ backgroundColor: transparent }" pt:root:class="!border-0 !bg-transparent">
+        <template #container="{ closeCallback }">
+            <div class="bg-[#071a24] flex rounded-full justify-between items-center p-10">
+                <span class="text-gray-500"> Comenzar llamada </span>
+                <div class="relative w-fit h-fit">
+                    <Button icon="pi pi-phone" @click="handleCallClick"
+                        class="absolute inset-0 bg-transparent animate-ping text-[#129E82] hover:bg-[#129E82] hover:text-[#071a24] rounded-full pointer-events-none" />
+                    <i class="pi pi-phone text-[#129E82] text-xl z-10 relative bg-transparent p-3 rounded-full cursor-pointer"
+                        @click="handleCallClick"></i>
+                </div>
+                <Button icon="pi pi-times" @click="activeCallTeamId = false"
+                    class="bg-transparent text-[#C13030] hover:bg-[#C13030] hover:text-[#071a24] hover rounded-full " />
+            </div>
+        </template>
+    </Dialog>
+
+    <Dialog  v-model:visible="visibleVideoCall"
+        class="w-11/12 h-11/12" :style="{ backgroundColor: '#04293C' }" :pt="{
+            content: {
+                class: 'p-4 h-full overflow-y-auto'
+            }
+        }">
+        <template #header>
+            <div class="flex justify-between items-center">
+                <div class="p-4 flex justify-between items-center">
+                    <span class="text-white mr-2 font-bold">Titulo de la llamada</span>
+                    <Button icon="pi pi-comment" @click="visibleRight = !visibleRight" severity="secondary"
+                        variant="text" rounded aria-label="Bookmark"
+                        :class="visibleRight ? 'text-[#129E82]' : 'text-[#646466]'"
+                        v-tooltip.bottom="'Abrir chat grupal'" />
+                    <Button icon="pi pi-microphone" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        @click="microphoneOn = !microphoneOn"
+                        :class="microphoneOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                    <Button icon="pi pi-camera" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        @click="cameraOn = !cameraOn" :class="cameraOn ? 'text-[#129E82]' : 'text-[#646466]'"
+                        class="text-[#129E82]" />
+                    <Button icon="pi pi-headphones" severity="secondary" variant="text" rounded aria-label="Bookmark"
+                        class="text-[#129E82]" @click="audioOn = !audioOn"
+                        :class="audioOn ? 'text-[#129E82]' : 'text-[#646466]'" />
+                </div>
+                <div>
+                    <Button severity="secondary" @click="endCall" label="Colgar llamada" class="border-[#8a2222] border-2  text-[#8a2222] p-2 text-sm 
+                                    font-light hover:bg-[#8a2222] hover:text-white" />
+                </div>
+                <div>
+                    <span class="text-white font-bold">Sala: {{ roomId }}</span>
+                    <Button label="Copiar ID" @click="copyToClipboard(roomId)" icon="pi pi-copy"
+                        class="text-xs text-[#9F86F9]" />
+                </div>
+            </div>
+        </template>
+        <div class="flex h-full">
+            <div v-if="visibleRight" class="relative z-10 bg-[#04293C] h-full w-1/3">
+                <div class="h-10/12">
+                    <div class="h-1/12 flex items-center text-[#9F86F9] gap-2 bg-[#081d27] p-4">
+                        <i class="pi pi-comment"></i>
+                        <div>
+                            <p class="chat-header-status">Chat grupal</p>
+                        </div>
+                    </div>
+                    <div class="h-full bg-[#030d11] p-4">
+                        <div v-for="msg in messages" :key="msg.id" :class="{ 'text-right': msg.user === username }"
+                            class="message-item">
+                            <p class="message-text"
+                                :class="msg.user === username ? 'message-sent' : 'message-received'">
+                                {{ msg.message }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="bg-[#081d27] flex items-center justify-between p-4">
+                        <InputText v-model="newMessage" @keyup.enter="sendMessage" placeholder="Escribe un mensaje..."
+                            class="bg-[#030d11] text-white p-2" />
+                        <Button icon="pi pi-send" @click="sendMessage" severity="contrast" variant="text" rounded
+                            class="hover:text-[#129E82]" />
+                    </div>
+                </div>
+            </div>
+            <video ref="localVideoRef" autoplay muted v-if="cameraOn"
+                class="bg-slate-900 absolute top-28 right-10 h-1/5 w-1/4 p-2">
+                Tu camara
+            </video>
+            <video ref="remoteVideoRef" autoplay
+                class="w-full h-full bg-black flex flex-col items-center justify-center gap-5">
+                <span class="text-xl"> En espera </span>
+                <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+            </video>
         </div>
     </Dialog>
 </template>
