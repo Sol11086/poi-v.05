@@ -61,11 +61,15 @@ CREATE TABLE messages (
     chat_id VARCHAR(15),
     team_channel_id VARCHAR(15),
     content TEXT,
+    is_encrypted BOOLEAN DEFAULT FALSE,
+    iv VARCHAR(32) NULL, -- Para el IV en formato hexadecimal (12 bytes -> 24 hex chars)
+    auth_tag VARCHAR(32) NULL, -- Para el Auth Tag en formato hexadecimal (16 bytes -> 32 hex chars)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (chat_id) REFERENCES private_chats(id) ON DELETE CASCADE,
     FOREIGN KEY (team_channel_id) REFERENCES team_channels(id) ON DELETE CASCADE
 );
+
 
 -- Tabla de Tareas dentro de Equipos
 CREATE TABLE tasks (

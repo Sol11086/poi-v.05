@@ -57,8 +57,11 @@
             </div>
             <!-- End -->
             <p v-else class="message-content">{{ msg.message }}</p>
-
-            <span class="message-time">{{ msg.time }}</span>
+            <div class="flex items-end justify-end gap-2">
+              <i v-if="msg.is_encrypted" class="pi pi-lock ml-1" style="font-size: 0.8rem;"
+              title="Este mensaje fue guardado cifrado en el servidor"></i>
+              <span class="message-time">{{ msg.time }}</span>
+            </div>
           </div>
           <div v-if="messages.length === 0 && !isLoadingMessages" class="no-messages">
             No hay mensajes en este canal todavía.
@@ -128,6 +131,7 @@ import ManualCldImage from '@/components/ManualCldImage.vue'; // Ajusta la ruta 
 import ManualCldVideo from '@/components/ManualCldVideo.vue';
 import Popover from 'primevue/popover';
 import axios from 'axios';
+import { isEncryptionGloballyEnabled } from '@/utils/globalState';
 
 const router = useRoute();
 
@@ -264,10 +268,10 @@ const initializeTeamData = async (teamIdToLoad) => {
     // Asumimos que /api/my-teams devuelve los equipos del usuario y podemos filtrar.
     // Si tienes un endpoint /api/teams/:id que devuelva solo uno, sería más directo.
     const teamDetailsResponse = await axios.get(`${API_BASE_URL}/api/my-teams`, { //
-      headers: { 
+      headers: {
         Authorization: `Bearer ${token}`,
         'ngrok-skip-browser-warning': 'true'
-       }
+      }
     });
     let foundTeam = null;
     if (teamDetailsResponse.data.success) {
@@ -283,7 +287,7 @@ const initializeTeamData = async (teamIdToLoad) => {
 
       // 2. Fetch Miembros del Equipo y Establecer si es Admin
       const membersResponse = await axios.get(`${API_BASE_URL}/api/teams/${teamIdToLoad}/members`, {
-        headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
+        headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' }
       });
       if (membersResponse.data.success) {
         const currentUserMemberInfo = membersResponse.data.members.find(m => m.user_id === currentUser.value.id);
@@ -295,7 +299,7 @@ const initializeTeamData = async (teamIdToLoad) => {
       // 3. Fetch Canales
       isLoadingChannels.value = true;
       const channelsResponse = await axios.get(`${API_BASE_URL}/api/teams/${teamIdToLoad}/channels`, {
-        headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
+        headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' }
       });
       if (channelsResponse.data.success) {
         channels.value = channelsResponse.data.channels;
@@ -329,7 +333,7 @@ const fetchTeamDetails = async (id) => {
     // Assuming /api/my-teams returns an array of teams user is part of
     // You might need a specific endpoint like /api/teams/:id if not already covered
     const response = await axios.get(`${API_BASE_URL}/api/my-teams`, {
-      headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
+      headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' }
     });
     if (response.data.success) {
       const foundTeam = response.data.teams.find(t => t.id === id);
@@ -356,7 +360,7 @@ const fetchTeamMembersAndSetAdmin = async (currentTeamId) => {
   if (!currentUser.value) return;
   try {
     const response = await axios.get(`${API_BASE_URL}/api/teams/${currentTeamId}/members`, {
-      headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true'}
+      headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' }
     });
     if (response.data.success) {
       const currentUserMemberInfo = response.data.members.find(m => m.user_id === currentUser.value.id);
@@ -382,7 +386,7 @@ const fetchTeamMembersAndSetAdmin = async (currentTeamId) => {
 const fetchChannels = async (currentTeamId) => {
   try {
     const response = await axios.get(`${API_BASE_URL}/api/teams/${currentTeamId}/channels`, {
-      headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' }
+      headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' }
     });
     if (response.data.success) {
       channels.value = response.data.channels;
@@ -472,6 +476,7 @@ const sendMessage = () => {
     team_id: team.value.id,
     channel_name: selectedChannel.value.channel_name,
     roomType: 'channel',
+    is_encryption_requested_by_client: isEncryptionGloballyEnabled.value,
   });
   newMessageText.value = '';
 };
@@ -484,7 +489,7 @@ const createChannel = async () => {
   try {
     const response = await axios.post(`${API_BASE_URL}/api/teams/${team.value.id}/channels`,
       { channel_name: newChannelName.value },
-      { headers: { Authorization: `Bearer ${token}`,'ngrok-skip-browser-warning': 'true' } }
+      { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } }
     );
     if (response.data.success && response.data.channel) {
       if (!channels.value.find(ch => ch.id === response.data.channel.id)) {
@@ -727,6 +732,7 @@ const createChannel = async () => {
 .message-input button:hover {
   background-color: var(--p-primary-600);
 }
+
 /*
 .file-message-content {
 
@@ -749,5 +755,4 @@ const createChannel = async () => {
   margin-bottom: 0.5rem;
 }
 */
-
 </style>
