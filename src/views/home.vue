@@ -1,17 +1,16 @@
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import 'primeicons/primeicons.css'
 import Notifications from "@/components/notifications.vue";
 import Chat from "@/components/chat.vue";
 import Homeworks from "@/components/homeworks.vue";
 import Teams from "@/components/teams.vue";
+import { parseJwt } from '@/utils/jwt.js';
 
 const visibleNotis = ref(false);
 const visibleChat = ref(false);
 const visibleHomework = ref(false);
 const visibleTeams = ref(false);
-
-
 
 const users = ref([
   { id: 1, name: 'Juan', avatar: 'https://i.pinimg.com/736x/dc/6c/b0/dc6cb0521d182f959da46aaee82e742f.jpg' },
@@ -38,101 +37,104 @@ const activeComponent = ref('home');
 const setActiveComponent = (component) => {
   activeComponent.value = activeComponent.value === component ? null : component;
 };
+
+const op = ref();
+const toggle = (event) => {
+  op.value.toggle(event);
+}
+
+const username = ref('');
+
+onMounted(() => {
+  const token = localStorage.getItem('user_token'); // <-- usa el nombre correcto
+  if (token) {
+    try {
+      const decoded = parseJwt(token);
+      console.log("Token decodificado:", decoded);
+      username.value = decoded.username || 'Usuario';
+    } catch (err) {
+      console.error("Token inválido:", err);
+    }
+  }
+});
+
+function logout() {
+  localStorage.removeItem('user_token');
+  localStorage.removeItem('username');
+  window.location.href="login";
+}
+
 </script>
 
 <template>
-     <div class="app-container">
-    <Menubar class="menubar">
+  <div class="app-container">
+    <Menubar class="bg-[#021F25] flex justify-between items-center px-4">
       <template #start>
-        <Button label="Empresa X" variant="link" class="" />
+        <Button label="Empresa X" variant="link" class="ml-4" />
       </template>
+
       <template #end>
-        <div class="menubar-end">
-          <InputText
-            placeholder="Search"
-            type="text"
-            class="search-input"
-          />
-          <Button
-            icon="pi pi-ellipsis-h"
-            variant="text"
-            rounded
-            aria-label="Filter"
-            class="filter-button"
-          />
-          <Avatar
-            image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-            shape="circle"
-          />
+        <div class="flex gap-4 items-center ml-auto p-4">
+          <Button icon="pi pi-gift" variant="text" rounded size="small" aria-label="Filter" class="filter-button"
+            @click="toggle" />
+          <Popover ref="op" :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none' }">
+            <div class="flex flex-col gap-4">
+              <span class="text-white">Recompensas</span>
+              <i class="pi pi-spin pi-star-fill text-[yellowgreen] text-sm"></i>
+            </div>
+          </Popover>
+          <InputText placeholder="Search" type="text" class="bg-[#21333D] p-2 text-white" />
+          <h2 class="text-white text-base">Bienvenido, {{ username }}</h2>
+          <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle" />
+          <Button icon="pi pi-sign-out" @click="logout()" variant="text" rounded aria-label="Logout"
+            class="filter-button" />
         </div>
       </template>
     </Menubar>
 
-    <div class="sidebar-container">
+    <div class="flex overflow-y-hidden h-full">
       <div class="sidebar">
-        <Button
-          icon="pi pi-bell"
-          variant="text"
-          size="large"
-          @click="visibleNotis = true"
-          rounded
-          class="sidebar-button"
-        />
-        <Button
-          icon="pi pi-users"
-          variant="text"
-          @click="setActiveComponent('teams')"
-          size="large"
-          rounded
-          class="sidebar-button"
-        />
-        <Button
-          icon="pi pi-comments"
-          variant="text"
-          size="large"
-          @click="visibleChat = true"
-          rounded
-          class="sidebar-button"
-        />
-        <Button
-          icon="pi pi-inbox"
-          variant="text"
-          size="large"
-          @click="setActiveComponent('homework')"
-          rounded
-          class="sidebar-button"
-        />
+        <Button icon="pi pi-bell" variant="text" size="large" @click="visibleNotis = true" rounded
+          class="sidebar-button" />
+        <Button icon="pi pi-users" variant="text" @click="setActiveComponent('teams')" size="large" rounded
+          class="sidebar-button" />
+        <Button icon="pi pi-comments" variant="text" size="large" @click="visibleChat = true" rounded
+          class="sidebar-button" />
+        <Button icon="pi pi-inbox" variant="text" size="large" @click="setActiveComponent('homework')" rounded
+          class="sidebar-button" />
       </div>
 
-      <div class="main-content">
+      <div class="flex-1 bg-[#010F16] text-white max-h-[calc(100vh-Xpx)] overflow-y-auto scr ml-16"
+        style="background-image: url('/src/assets/Group 39.png'); background-repeat: no-repeat; background-position: 120% 0.5%; background-size: 700px auto; background-attachment: fixed;">
         <Teams v-if="activeComponent === 'teams'" />
         <Homeworks v-if="activeComponent === 'homework'" />
       </div>
     </div>
 
-    <Drawer
-      v-model:visible="visibleNotis"
-      header="Notificaciones"
-      class="drawer"
-      :style="{ left: '4rem' }"
-      pt:root:class="!border-0 !bg-#021F25" pt:mask:class="backdrop-blur-sm"
-    >
-    <template #header>
+    <Drawer v-model:visible="visibleNotis" header="Notificaciones" class="p-4"
+      :style="{ left: '4rem', backgroundColor: '#04293C', border: 'none', width: '25rem' }"
+      pt:mask:class="backdrop-blur-sm">
+      <template #header>
         <span class="drawer-header">
-            <i class="pi pi-bell"></i>
-            Notificaciones 
+          <i class="pi pi-bell"></i>
+          Notificaciones
         </span>
-    </template>
-        <Notifications></Notifications>
+      </template>
+      <Notifications></Notifications>
     </Drawer>
-    <Dialog v-model:visible="visibleChat" maximizable class="dialog">
-        <template #header>
-            <span class="dialog-header">
-            <i class="pi pi-comments"></i>
-            Chat 
+    <Dialog v-model:visible="visibleChat" maximizable class="dialog"
+      :style="{ width: '50rem', height: '30rem', backgroundColor: '#04293C', padding: '1rem', border: 'none' }" :pt="{
+        content: {
+          class: 'h-[500px] overflow-y-auto'
+        }
+      }">
+      <template #header>
+        <span class="dialog-header">
+          <i class="pi pi-comments"></i>
+          Chat
         </span>
-        </template>
-            <Chat></Chat>
+      </template>
+      <Chat></Chat>
     </Dialog>
   </div>
 </template>
@@ -146,7 +148,8 @@ const setActiveComponent = (component) => {
 }
 
 .menubar {
-  background-color: #021F25; /* Dark green */
+  background-color: #021F25;
+  /* Dark green */
   border: none;
   border-radius: 0;
   margin: 0;
@@ -167,19 +170,16 @@ const setActiveComponent = (component) => {
 .search-input {
   width: 25rem;
   border-radius: 9999px;
-  background-color: #21333D; /* Gunmetal color */
+  background-color: #21333D;
+  /* Gunmetal color */
   border: none;
+  color: white
 }
 
 .filter-button {
   background-color: transparent;
-  color: #129E82; /* Pomona Green */
-}
-
-.sidebar-container {
-  display: flex;
-  flex: 1;
-  padding-top: 4rem;
+  color: #129E82;
+  /* Pomona Green */
 }
 
 .sidebar {
@@ -199,20 +199,23 @@ const setActiveComponent = (component) => {
 .sidebar-button {
   margin-bottom: 2.5rem;
   background-color: transparent;
-  color: #129E82; /* Pomona Green */
+  color: #129E82;
+  /* Pomona Green */
 }
 
-.main-content {
+/*.main-content {
   flex: 1;
-  background-color: #010f16;
+  background: #010F16 url('/src/assets/Group 39.png') no-repeat;
+  background-position: 120% 5%;
+  background-size: 700px auto;
   color: white;
   overflow: auto;
   margin-left: 4rem;
-}
+}*/
 
 .drawer {
-  width: 25%;
-  max-width: 80rem;
+  width: 100%;
+  max-width: 100rem;
   position: fixed;
   top: 4rem;
   right: 0;
@@ -227,13 +230,18 @@ const setActiveComponent = (component) => {
   gap: 1.25rem;
   font-weight: 500;
   font-size: 1.25rem;
-  color: #9F86F9; /* Lavender color */
+  color: #9F86F9;
+  /* Lavender color */
   align-items: center;
 }
 
 .dialog {
   background-color: #04293C;
-  border-color: #39b54a; /* Pomona Green */
+  border-color: #39b54a;
+  width: 10rem;
+  height: 10rem;
+  padding: 4rem;
+  /* Pomona Green */
 }
 
 .dialog-header {
@@ -241,8 +249,8 @@ const setActiveComponent = (component) => {
   gap: 1.25rem;
   font-weight: 500;
   font-size: 1.25rem;
-  color: #e0e0e0; /* Lavender color */
+  color: #e0e0e0;
+  /* Lavender color */
   align-items: center;
 }
-
 </style>
